@@ -1,0 +1,11 @@
+<div id="logo">
+	{% if request.url_rule.rule[1] %}
+	    <figure style="position: fixed; top: -3vh; right: -2vw; margin: 2.5vh 2vw;">
+	        <img src="/static/img/icon/logo5.png" alt="رستاک" width="90" height="48">
+	    </figure>
+	{% else %}
+	    <figure>
+	        <img src="/static/img/icon/logo5.png" alt="رستاک" width="90" height="48">
+	    </figure>
+    {% endif %}
+</div> 

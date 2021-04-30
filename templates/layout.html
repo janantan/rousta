@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+{% if "login" in request.base_url %}
+    <html style="background: #f0f0f0 !important;" lang="fa-IR">
+{% else %}
+    <html lang="fa-IR">
+{% endif %}
+    <head>
+        <title>رُستاک</title>
+        <!--<meta charset="utf-8" />-->
+        <meta content="text/html;charset=UTF-8" http-equiv="Content-Type" />
+        <meta name="description" content="رستاک"  />
+        <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+        <meta name="enamad" content="481609" />
+        <!--<script src='https://www.google.com/recaptcha/api.js'></script>-->
+        <link rel="stylesheet" type="text/css" href="/static/css/rousta.css?v=900004" />
+        <!--<link rel="stylesheet" type="text/css" href="/static/css/rousta.css?v=900001" media="screen and (min-width: 512px)" />
+        <link rel="stylesheet" href="/static/css/rousta512.css?v=900001" media="screen and (max-width: 511px)"/>-->
+        <link rel="shortcut icon" type="image/x-ico" href="/static/img/icon/favicon.ico" />
+        <link rel="stylesheet" href="/static/css/js-persian-cal.css">
+        <script type="text/javascript" src="/static/js/js-persian-cal.min.js"></script>
+    </head>
+    <body>
+        {% if "login" in request.base_url %}
+            <header style="background: #fafafa; position: fixed; top: 0; right: 0; left: 0;" class="clearfix">
+        {% else %}
+            <header id="main-header" class="clearfix">
+                {% include 'includes/_navbar.html' %}
+        {% endif %}
+            
+        </header>
+        {% include 'includes/_messages.html' %}
+        {% block body %}{% endblock %}        
+    </body>
+</html>
