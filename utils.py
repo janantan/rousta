@@ -1,9 +1,22 @@
 from ippanel import Client, Error, HTTPError, ResponseCode
 from werkzeug.utils import secure_filename
+from pymongo import MongoClient
 from rousta import app
 import random2
 import os
 import config
+
+#Config MongoDB
+def config_mongodb():
+	#mongodb://mongodb_user:password@localhost:27017/mongodb_db
+    uri = "mongodb://{}:{}@{}:{}".format(
+    	config.MONGODB_USERNAME,
+    	config.MONGODB_PASSWORD,
+        config.MONGODB_HOST,
+        config.MONGODB_PORT
+    )
+    cur = MongoClient(uri)[config.DB_NAME]
+    return cur
 
 
 def send_sms(phoneNumber, code):
@@ -38,10 +51,11 @@ def save_image_from_form(image, owner, Id):
 		if not os.path.exists(directory):
 			os.makedirs(directory)
 		file_type  = filename.rsplit('.', 1)[1].lower()
-		print(file_type)
-		img_directory = os.path.join(directory, str(random2.randint(10000, 99999))+'.'+file_type)
+		img_name = str(random2.randint(10000, 99999))+'.'+file_type
+		img_directory = os.path.join(directory, img_name)
+		img_path = os.path.join(config.IMAGE_URL_PATH, owner, Id, img_name)
 		image.save(img_directory)
-		return img_directory
+		return img_path
 	else:
 		return False
 
@@ -51,10 +65,12 @@ def save_encoded_image(image, owner, Id):
 		directory = os.path.join(config.IMAGE_FILE_FOLDER, owner, Id)
 		if not os.path.exists(directory):
 			os.makedirs(directory)
-		img_directory = os.path.join(directory, str(random2.randint(10000, 99999))+'.'+file_type)
+		img_name = str(random2.randint(10000, 99999))+'.'+file_type
+		img_directory = os.path.join(directory, img_name)
+		img_path = os.path.join(config.IMAGE_URL_PATH, owner, Id, img_name)
 		image_result = open(img_directory, 'wb') # create a writable image and write the decoding result
 		image_result.write(image)
 		#image.save(img_directory)
-		return img_directory
+		return img_path
 	except:
 		return False

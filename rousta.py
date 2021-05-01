@@ -39,6 +39,9 @@ manager = Manager(app)
 
 import models, utils
 
+#Config mongodb
+#mongo_cursor = utils.config_mongodb()
+
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in config.ALLOWED_EXTENSIONS
@@ -257,10 +260,10 @@ def new_product_api():
         if img not in request.files:
             break
         image = request.files[img]
-        #image_ = open('123.jpg', 'rb')
-        #image_read = image_.read()
-        #image_64_encode = base64.encodestring(image_read)
-        #encoded_img_list.append(image_64_encode)
+        image_ = open('123.jpg', 'rb')
+        image_read = image_.read()
+        image_64_encode = base64.encodestring(image_read)
+        encoded_img_list.append(image_64_encode)
         img_directory = utils.save_image_from_form(image, owner, productId)
         if img_directory:
             imageList.append(img_directory)
@@ -268,7 +271,8 @@ def new_product_api():
             return jsonify({'status': status, 'message': img + ": Not Valid Image File Type! (png, jpg, jpeg, gif)"})
 
     for encoded_img in encoded_img_list:
-        decoded_img = base64.decodestring(encoded_img)
+        #decoded_img = base64.decodestring(encoded_img)
+        decoded_img = base64.b64decode(encoded_img)
         img_directory = utils.save_encoded_image(decoded_img, owner, productId)
         if img_directory:
             imageList.append(img_directory)
@@ -289,6 +293,46 @@ def new_product_api():
         )
     status = 200  #success
     message = {'data': {'productId': productId}}
+    return jsonify({'status': status, 'message': message})
+
+@app.route('/api/v1.0/product-query/post', methods=['POST'])
+def product_query_api():
+    status = 406  #Not Acceptable
+    message = {'error': 'There is no data!'}
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'status': status, 'message': message})
+
+    number = data['number'] if 'number' in data.keys() else 20
+    for item in data.keys():
+        pass
+    productId = str(data['productId']) if 'productId' in data.keys() else None
+    title = str(data['title']) if 'title' in data.keys() else None
+    category = str(data['category']) if 'category' in data.keys() else None
+
+    result_list = []
+    result = models.Product.query.all()[:-(number+1):-1]
+    for r in result:
+        result_dict = {
+        'productId' : r.productId,
+        'owner' : r.owner,
+        'title' : r.title,
+        'category' : r.category,
+        'description' : r.description,
+        'price' : r.price,
+        'imageList' : r.imageList,
+        'ifUsed' : r.ifUsed,
+        'city' : r.city,
+        'byer' : r.byer,
+        'ordered' : r.ordered,
+        'viewed' : r.viewed 
+        }
+        result_list.append(result_dict)
+    print(result_list)
+
+    status = 200  #success
+    message = {'result': result_list}
     return jsonify({'status': status, 'message': message})
 
 @app.route('/', methods=['GET'])
