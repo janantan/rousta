@@ -23,3 +23,4 @@ ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg', 'gif'])
 IMAGE_FILE_FOLDER = 'E:/projects/ROUSTA/rousta/static/img'
 IMAGE_URL_PATH = 'http://localhost:5000/static/img'
 ATTACHED_FILE_FOLDER = '/root/vestano/static/attachments'
+#test branch
