@@ -222,123 +222,42 @@ def cellNumber_approvement_api():
     message = {'data': {'phone number': cellNumber}}
     return jsonify({'status': status, 'message': message})
 
-@app.route('/api/v1.0/new-product/post', methods=['POST'])
-def new_product_api():
-    status = 406  #Not Acceptable
-    message = {'error': 'There is no data!'}
-
+@app.route('/api/v1.0/new-<object_type>/post', methods=['POST'])
+def create_object_api(object_type):
     data = request.get_json()
-    if not data:
-        return jsonify({'status': status, 'message': message})
+    if not utils.validating_request(data, object_type)[0]:
+        return jsonify(utils.validating_request(data, object_type)[1])
+    owner = utils.validating_request(data, object_type)[1]
+    record = utils.make_record(data, object_type, owner)
+    if not record:
+        return jsonify({
+            'status': config.HTML_STATUS_CODE['NotAcceptable'],
+            'message': "The image can not be saved!"
+            })
+    if 'product' in object_type:
+        models.Product.create(**record)
+        message = {'productId': record['productId']}
+    elif 'shop' in object_type:
+        models.Shop.create(**record)
+        message = {'shopId': record['shopId']}
+    return jsonify({
+        'status': config.HTML_STATUS_CODE['Success'],
+        'message': message})
 
-    if 'cellNumber' not in data.keys():
-        return jsonify({'status': status, 'message': "cellNumber is missed!"})
-    if 'title' not in data.keys():
-        return jsonify({'status': status, 'message': "title is missed!"})
-    if 'category' not in data.keys():
-        return jsonify({'status': status, 'message': "category is missed!"})
-    cellNumber = str(data['cellNumber'])
-    if not models.User.query.filter_by(cellNumber = cellNumber).first():
-        return jsonify({'status': 404, #Not Found
-            'message': "The User is not Registered!"})
-    else:
-        owner = models.User.query.filter_by(cellNumber = cellNumber).first().userId
-        productId = str(uuid.uuid4())
-    title = str(data['title'])
-    category = str(data['category'])
-    description = str(data['description']) if 'description' in data.keys() else None
-    price = data['price'] if 'price' in data.keys() else (1)
-    ifUsed = data['ifUsed'] if 'ifUsed' in data.keys() else False
-    city = str(data['city']) if 'city' in data.keys() else None
-    encoded_img_list = data['imageList'] if 'imageList' in data.keys() else []
-    imageList = []
-
-    index = 0
-    while True:
-        index = index + 1
-        img = 'image'+str(index)
-        if img not in request.files:
-            break
-        image = request.files[img]
-        image_ = open('123.jpg', 'rb')
-        image_read = image_.read()
-        image_64_encode = base64.encodestring(image_read)
-        encoded_img_list.append(image_64_encode)
-        img_directory = utils.save_image_from_form(image, owner, productId)
-        if img_directory:
-            imageList.append(img_directory)
-        else:
-            return jsonify({'status': status, 'message': img + ": Not Valid Image File Type! (png, jpg, jpeg, gif)"})
-
-    for encoded_img in encoded_img_list:
-        #decoded_img = base64.decodestring(encoded_img)
-        decoded_img = base64.b64decode(encoded_img)
-        img_directory = utils.save_encoded_image(decoded_img, owner, productId)
-        if img_directory:
-            imageList.append(img_directory)
-        else:
-            return jsonify({'status': status, 'message': img + ": Not Valid Image File Type! (png, jpg, jpeg, gif)"})
-
-    models.Product.create(
-        productId = productId,
-        createdDatetime = jdatetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S'),
-        owner = owner,
-        title = title,
-        category = category,
-        description = description,
-        price = price,
-        imageList = imageList,
-        ifUsed = ifUsed,
-        city = city
-        )
-    status = 200  #success
-    message = {'data': {'productId': productId}}
-    return jsonify({'status': status, 'message': message})
-
-@app.route('/api/v1.0/product-query/post', methods=['POST'])
-def product_query_api():
-    status = 406  #Not Acceptable
-    message = {'error': 'There is no data!'}
-
-    data = request.get_json()
-    if not data:
-        return jsonify({'status': status, 'message': message})
-
-    number = data['number'] if 'number' in data.keys() else 20
-    for item in data.keys():
-        pass
-    productId = str(data['productId']) if 'productId' in data.keys() else None
-    title = str(data['title']) if 'title' in data.keys() else None
-    category = str(data['category']) if 'category' in data.keys() else None
-
-    result_list = []
-    result = models.Product.query.all()[:-(number+1):-1]
-    for r in result:
-        result_dict = {
-        'productId' : r.productId,
-        'owner' : r.owner,
-        'title' : r.title,
-        'category' : r.category,
-        'description' : r.description,
-        'price' : r.price,
-        'imageList' : r.imageList,
-        'ifUsed' : r.ifUsed,
-        'city' : r.city,
-        'byer' : r.byer,
-        'ordered' : r.ordered,
-        'viewed' : r.viewed 
-        }
-        result_list.append(result_dict)
-    print(result_list)
-
-    status = 200  #success
-    message = {'result': result_list}
-    return jsonify({'status': status, 'message': message})
+@app.route('/api/v1.0/<query_type>-query/post', methods=['POST'])
+def query_api(query_type):
+    data = request.get_json() if request.get_json() else {}
+    (l1, l2) = utils.query_range(data)
+    result_list = utils.query_result(data, query_type, l1, l2)
+    return jsonify({
+        'status': config.HTML_STATUS_CODE['Success'],
+        'message': {'result': result_list},
+        'found records': len(result_list)
+        })
 
 @app.route('/', methods=['GET'])
 def home():
     return render_template('home.html')
-    #return ('Hellow world!')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug = True)

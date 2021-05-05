@@ -3,6 +3,7 @@ from werkzeug.utils import secure_filename
 from pymongo import MongoClient
 from rousta import app
 import random2
+import base64
 import os
 import config
 

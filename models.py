@@ -16,9 +16,9 @@ class BaseMixin(object):
 
 class User(BaseMixin, db.Model):
 	__tabelname__ = 'users'
-	id = db.Column(db.BigInteger(), primary_key=True)
+	#id = db.Column(db.BigInteger())
+	userId = db.Column(db.String(200), primary_key=True)
 	cellNumber = db.Column(db.String(13), unique=True, index=True)
-	userId = db.Column(db.String(200), index=True)
 	createdDatetime = db.Column(db.String(20))
 	modified_on = db.Column(db.DateTime(), onupdate=datetime.datetime.now)
 	password = db.Column(db.String(300))
@@ -48,18 +48,18 @@ class User(BaseMixin, db.Model):
 
 class Product(BaseMixin, db.Model):
 	__tabelname__ = 'products'
-	id = db.Column(db.BigInteger(), primary_key=True)
-	productId = db.Column(db.String(200), unique=True, index=True)
+	#id = db.Column(db.BigInteger())
+	productId = db.Column(db.String(200), primary_key=True)
 	createdDatetime = db.Column(db.String(20))
 	modified_on = db.Column(db.DateTime(), onupdate=datetime.datetime.now)
 	owner = db.Column(db.String(200), index=True)
-	title = db.Column(db.String(200))
+	title = db.Column(db.String(200), index=True)
 	category = db.Column(db.String(300))
 	description = db.Column(db.Text())
 	price = db.Column(db.Integer())
 	imageList = db.Column(JSON)
 	ifUsed = db.Column(db.Boolean())
-	city = db.Column(db.String(10))
+	city = db.Column(db.String(100))
 	byer = db.Column(db.String(200))
 	ordered = db.Column(db.Integer())
 	viewed = db.Column(db.Integer())
@@ -83,15 +83,15 @@ class Product(BaseMixin, db.Model):
 
 class Shop(BaseMixin, db.Model):
 	__tabelname__ = 'shops'
-	id = db.Column(db.BigInteger(), primary_key=True)
-	shopId = db.Column(db.String(200), unique=True, index=True)
+	#id = db.Column(db.BigInteger())
+	shopId = db.Column(db.String(200), primary_key=True)
 	createdDatetime = db.Column(db.String(20))
 	modified_on = db.Column(db.DateTime(), onupdate=datetime.datetime.now)
 	owner = db.Column(db.String(200), index=True)
-	title = db.Column(db.String(200))
+	title = db.Column(db.String(200), index=True)
 	description = db.Column(db.Text())
-	image = db.Column(JSON)
-	address = db.Column(db.String(10))
+	imageList = db.Column(JSON)
+	address = db.Column(db.Text())
 	phoneNumber = db.Column(db.String(13))
 	productsList = db.Column(JSON)
 	customersList = db.Column(JSON)
@@ -100,14 +100,14 @@ class Shop(BaseMixin, db.Model):
 	shopLink = db.Column(db.String(200))
 
 	def __init__(self, shopId, createdDatetime, owner, title, description=None,
-		image=[], address=None, phoneNumber=None, productsList=[], customersList=[],
-		bankAcountsInformation={}, viewed=0, shopLink=None):
+		imageList=[], address=None, phoneNumber=None, productsList=[], customersList=[],
+		bankAcountsInformation=[], viewed=0, shopLink=None):
 		self.shopId = shopId
 		self.createdDatetime = createdDatetime
 		self.owner = owner
 		self.title = title
 		self.description = description
-		self.image = image
+		self.imageList = imageList
 		self.address = address
 		self.phoneNumber = phoneNumber
 		self.productsList = productsList
@@ -118,11 +118,11 @@ class Shop(BaseMixin, db.Model):
 
 class Category(BaseMixin, db.Model):
 	__tabelname__ = 'categories'
-	id = db.Column(db.BigInteger(), primary_key=True)
-	categoryId = db.Column(db.String(200), unique=True)
+	#id = db.Column(db.BigInteger())
+	categoryId = db.Column(db.String(200), primary_key=True)
 	createdDatetime = db.Column(db.String(20))
 	modified_on = db.Column(db.DateTime(), onupdate=datetime.datetime.now)
-	title = db.Column(db.String(200))
+	title = db.Column(db.String(200), index=True)
 	description = db.Column(db.Text())
 	image = db.Column(JSON)
 	productsList = db.Column(JSON)

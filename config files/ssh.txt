@@ -1,6 +1,0 @@
-server ip: 91.98.96.173
-user: rstaakir
-pass: 9ijnBGT200840
-port: 1396
-
-source /home/rstaakir/virtualenv/ROUSTA/3.7/bin/activate && cd /home/rstaakir/ROUSTA
