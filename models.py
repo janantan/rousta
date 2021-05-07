@@ -60,13 +60,15 @@ class Product(BaseMixin, db.Model):
 	imageList = db.Column(JSON)
 	ifUsed = db.Column(db.Boolean())
 	city = db.Column(db.String(100))
+	shopId = db.Column(db.String(200))
 	byer = db.Column(db.String(200))
 	ordered = db.Column(db.Integer())
-	viewed = db.Column(db.Integer())
+	viewList = db.Column(JSON)
+	likeList = db.Column(JSON)
 
 	def __init__(self, productId, createdDatetime, owner, title, category,
-		description=None, price=None, imageList=[], ifUsed=False, city=None, byer=None,
-		ordered=0, viewed=0):
+		shopId, description=None, price=None, imageList=[], ifUsed=False,
+		city=None, byer=None, ordered=0, viewList=[], likeList=[]):
 		self.productId = productId
 		self.createdDatetime = createdDatetime
 		self.owner = owner
@@ -77,9 +79,11 @@ class Product(BaseMixin, db.Model):
 		self.imageList = imageList
 		self.ifUsed = ifUsed
 		self.city = city
+		self.shopId = shopId
 		self.byer = byer
 		self.ordered = ordered
-		self.viewed = viewed
+		self.viewList = viewList
+		self.likeList = likeList
 
 class Shop(BaseMixin, db.Model):
 	__tabelname__ = 'shops'
@@ -96,12 +100,13 @@ class Shop(BaseMixin, db.Model):
 	productsList = db.Column(JSON)
 	customersList = db.Column(JSON)
 	bankAcountsInformation = db.Column(JSON)
-	viewed = db.Column(db.Integer())
+	viewList = db.Column(JSON)
+	likeList = db.Column(JSON)
 	shopLink = db.Column(db.String(200))
 
 	def __init__(self, shopId, createdDatetime, owner, title, description=None,
 		imageList=[], address=None, phoneNumber=None, productsList=[], customersList=[],
-		bankAcountsInformation=[], viewed=0, shopLink=None):
+		bankAcountsInformation=[], viewList=[], likeList=[], shopLink=None):
 		self.shopId = shopId
 		self.createdDatetime = createdDatetime
 		self.owner = owner
@@ -113,7 +118,8 @@ class Shop(BaseMixin, db.Model):
 		self.productsList = productsList
 		self.customersList = customersList
 		self.bankAcountsInformation = bankAcountsInformation
-		self.viewed = viewed
+		self.viewList = viewList
+		self.likeList = likeList
 		self.shopLink = shopLink
 
 class Category(BaseMixin, db.Model):

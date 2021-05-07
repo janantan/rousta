@@ -1,12 +1,13 @@
 from ippanel import Client, Error, HTTPError, ResponseCode
 from werkzeug.utils import secure_filename
 from pymongo import MongoClient
-from rousta import app
+from rousta import app, db
 import datetime
 import jdatetime
 import random2
 import base64
 import uuid
+import copy
 import os
 import config, models
 
@@ -89,10 +90,22 @@ def input_validator(data, object_type):
 		return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "cellNumber is missed!"}
 	if 'title' not in data.keys():
 		return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "title is missed!"}
-	if 'category' in object_type:
+	if 'product' in object_type:
 		if 'category' not in data.keys():
 			return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "category is missed!"}
+		if 'shopId' not in data.keys():
+			return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "shopId is missed!"}
 	return False
+
+def like_view_validator(data):
+	if if_input_exists(data):
+		return (False, if_input_exists(data))
+	if 'userId' not in data.keys():
+		return (False, {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "userId is missed!"})
+	if 'productId' not in data.keys():
+		return (False, {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "productId is missed!"})
+	return (True, None)
+
 
 def validating_request(data, object_type):
 	if if_input_exists(data):
@@ -118,6 +131,7 @@ def make_record(data, object_type, record):
 			return False
 	if 'product' in object_type:
 		record['productId'] = objectId
+		record['shopId'] = data['shopId']
 		record['category'] = data['category']
 		record['price'] = data['price'] if 'price' in data.keys() else (1)
 		record['ifUsed'] = data['ifUsed'] if 'ifUsed' in data.keys() else False
@@ -141,9 +155,10 @@ def query_range(data):
 def query_result(data, query_type, l1, l2):
 	if 'product' in query_type:
 		objectId = data['productId'] if 'productId' in data.keys() else None
+		userId = data['userId'] if 'userId' in data.keys() else None
 		model = ({'productId': objectId}, models.Product)
 		result = filter_query(data, model, objectId, l1, l2)
-		return product_model(result)
+		return product_model(result, userId)
 	elif 'shop' in query_type:
 		objectId = data['shopId'] if 'shopId' in data.keys() else None
 		model = ({'shopId': objectId}, models.Shop)
@@ -161,10 +176,36 @@ def filter_query(data, model, objectId, l1, l2):
 	else:
 		q = {}
 		for key, value in data.items():
-			if (value) and key not in ['number', 'factor']:
+			if (value) and key not in ['number', 'factor', 'userId']:
 				q[key] = value
-		result = list(model[1].query.filter_by(**q))[-(l1+1):-(l2+1):-1]
+		result = list(model[1].query.filter_by(**q).order_by(model[1].createdDatetime))[-(l1+1):-(l2+1):-1]
 	return result
+
+def like_view_action(data, action_type):
+	status = config.HTML_STATUS_CODE['Duplicate']
+	product_result = db.session.query(models.Product).filter_by(productId = data['productId']).first()
+	if action_type == 'view':
+		v_list = copy.deepcopy(product_result.viewList)
+		if data['userId'] in v_list:
+			return (False, {'status': status, 'message': "viewed before!"})
+		v_list.append(data['userId'])
+		product_result.viewList = v_list
+	elif action_type == 'like':
+		l_list = copy.deepcopy(product_result.likeList)
+		if data['userId'] in l_list:
+			return (False, {'status': status, 'message': "liked before!"})
+		l_list.append(data['userId'])
+		product_result.likeList = l_list
+	elif action_type == 'dislike':
+		l_list = copy.deepcopy(product_result.likeList)
+		if data['userId'] not in l_list:
+			return (False, {'status': status, 'message': "the user didn't like this product!"})
+		l_list.remove(data['userId'])
+		product_result.likeList = l_list
+	db.session.commit()
+	l1, l2 = (len(product_result.viewList), len(product_result.likeList))
+	db.session.close()
+	return (True, [l1, l2])
 
 def user_model(result):
 	result_list = []
@@ -178,19 +219,19 @@ def user_model(result):
 		'family': r.family,
 		'nationalCode': r.nationalCode,
 		'address': r.address,
-		'adList': r.adList,
-		'purchaseHistory': r.purchaseHistory,
 		'shopList': r.shopList
 		}
 		result_list.append(result_dict)
 	return result_list
 
-def product_model(result):
+def product_model(result, userId):
 	result_list = []
 	for r in result:
+		likeFlag = True if userId in r.likeList else False
 		result_dict = {
 		'productId' : r.productId,
 		'owner' : r.owner,
+		'shopId': r.shopId,
 		'createdDatetime': r.createdDatetime,
 		'modified_on': r.modified_on,
 		'title' : r.title,
@@ -200,9 +241,8 @@ def product_model(result):
 		'imageList' : r.imageList,
 		'ifUsed' : r.ifUsed,
 		'city' : r.city,
-		'byer' : r.byer,
-		'ordered' : r.ordered,
-		'viewed' : r.viewed
+		'viewedNumber' : len(r.viewList),
+		'likeFlag': likeFlag
 		}
 		result_list.append(result_dict)
 	return result_list
@@ -221,9 +261,7 @@ def shop_model(result):
 		'imageList' : r.imageList,
 		'phoneNumber': r.phoneNumber,
 		'productsList': r.productsList,
-		'customersList': r.customersList,
 		'bankAcountsInformation': r.bankAcountsInformation,
-		'viewed': r.viewed,
 		'shopLink': r.shopLink
 		}
 		result_list.append(result_dict)

@@ -168,16 +168,19 @@ def app_initiation_api():
     cellNumber = str(data['cellNumber'])
     registerCode = str(random2.randint(10000, 99999))
     sms_result = utils.send_sms(cellNumber, registerCode)
-    if db.session.query(models.User).filter(models.User.cellNumber == cellNumber).count():
+    user = models.User.query.filter_by(cellNumber = cellNumber).first()
+    if user:
         return jsonify({
             'status': 303,
-            'data': {'message': cellNumber + " is registered before!", 'register code': registerCode}
+            'message': {'phone number': cellNumber,
+            'register code': registerCode,
+            'userId': user.userId}
             })
     status = 200  #success
-    message = {'data': {
+    message = {
     'phone number': cellNumber,
     'register code': registerCode
-    }}
+    }
     return jsonify({'status': status, 'message': message})
 
 @app.route('/api/v1.0/phoneNumber-approvement/post', methods=['POST'])
@@ -206,12 +209,18 @@ def cellNumber_approvement_api():
         status = 406  #Not Acceptable
         message = {'error': 'Duplicated phone number!'}
         return jsonify({'status': status, 'message': message})
-    shopList = {'1':'a', '2':'b'}
+    userId = str(uuid.uuid4())
+    shop = utils.make_record({'title': "فروشگاه من"}, 'shop', {'owner': userId})
+    models.Shop.create(**shop)
+    shopList = []
+    shopList.append(shop)
+    print(shopList)
 
     #create a record
     models.User.create(
         cellNumber=cellNumber,
-        userId=str(uuid.uuid4()),
+        userId=userId,
+        shopList=shopList,
         createdDatetime=jdatetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S')
         )
     #data = models.User(cellNumber=cellNumber, userId=str(uuid.uuid4()),
@@ -219,7 +228,10 @@ def cellNumber_approvement_api():
     #db.session.add(data)
     #db.session.commit()
     status = 200  #success
-    message = {'data': {'phone number': cellNumber}}
+    message = {
+    'phone number': cellNumber,
+    'userId': userId
+    }
     return jsonify({'status': status, 'message': message})
 
 @app.route('/api/v1.0/new-<object_type>/post', methods=['POST'])
@@ -236,6 +248,11 @@ def create_object_api(object_type):
             })
     if 'product' in object_type:
         models.Product.create(**record)
+        shop_result = db.session.query(models.Shop).filter_by(shopId = record['shopId']).first()
+        products_list = copy.deepcopy(shop_result.productsList)
+        products_list.append(record['productId'])
+        shop_result.productsList = products_list
+        db.session.commit()
         message = {'productId': record['productId']}
     elif 'shop' in object_type:
         models.Shop.create(**record)
@@ -244,7 +261,7 @@ def create_object_api(object_type):
         'status': config.HTML_STATUS_CODE['Success'],
         'message': message})
 
-@app.route('/api/v1.0/<query_type>-query/post', methods=['POST'])
+@app.route('/api/v1.0/<query_type>-query/get', methods=['POST'])
 def query_api(query_type):
     data = request.get_json() if request.get_json() else {}
     (l1, l2) = utils.query_range(data)
@@ -253,6 +270,21 @@ def query_api(query_type):
         'status': config.HTML_STATUS_CODE['Success'],
         'message': {'result': result_list},
         'found records': len(result_list)
+        })
+
+#like and view products
+@app.route('/api/v1.0/<action_type>-product/put', methods=['PUT'])
+def like_view_api(action_type):
+    data = request.get_json() if request.get_json() else {}
+    if not utils.like_view_validator(data)[0]:
+        return jsonify(utils.like_view_validator(data)[1])
+    action_result = utils.like_view_action(data, action_type)
+    if not action_result[0]:
+        return jsonify(action_result[1])
+    (len1, len2) = action_result[1]
+    return jsonify({
+        'status': config.HTML_STATUS_CODE['Success'],
+        'message': {'productId': data['productId'], 'viewedNumber': len1, 'likedNumber': len2}
         })
 
 @app.route('/', methods=['GET'])
