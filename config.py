@@ -27,5 +27,17 @@ HTML_STATUS_CODE = {
 'Success': 200,
 'NotAcceptable': 406,
 'NotFound': 404,
-'Duplicate': 409
+'Duplicate': 409,
+'See Other': 303
 }
+
+
+#delete a record
+#models.User.delete(models.User.query.filter_by(cellNumber = cellNumber).first())
+
+#update a record
+#record = db.session.query(models.User).filter_by(cellNumber = cellNumber)
+#record[0].name = "محمدرضا"
+#record[0].family = "بابالو"
+#record[0].fullName = record[0].name + ' ' + record[0].family
+#db.session.commit()

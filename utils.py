@@ -85,6 +85,13 @@ def if_input_exists(data):
 		return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': {'error': 'There is no data!'}}
 	return False
 
+def initiation_validator(data):
+	if if_input_exists(data):
+		return (False, if_input_exists(data))
+	if 'cellNumber' not in data.keys():
+		return (False, {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "cellNumber is missed!"})
+	return (True, None)
+
 def input_validator(data, object_type):
 	if 'cellNumber' not in data.keys():
 		return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "cellNumber is missed!"}
