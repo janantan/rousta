@@ -100,3 +100,15 @@ def register_to_app_api():
         status = 401  #unauthorized
         message = {'error': 'Not authorized request!'}
     return jsonify({'status': status, 'message': message})
+
+
+
+#delete a record
+#models.User.delete(models.User.query.filter_by(cellNumber = cellNumber).first())
+
+#update a record
+#record = db.session.query(models.User).filter_by(cellNumber = cellNumber)
+#record[0].name = "محمدرضا"
+#record[0].family = "بابالو"
+#record[0].fullName = record[0].name + ' ' + record[0].family
+#db.session.commit()

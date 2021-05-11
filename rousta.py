@@ -46,6 +46,7 @@ import models, utils
 def bad_request():
     return abort(403)
 
+#initiating to app
 @app.route('/api/v1.0/initiation/post', methods=['POST'])
 def app_initiation_api():
     data = request.get_json() if request.get_json() else {}
@@ -68,6 +69,7 @@ def app_initiation_api():
         'register code': registerCode}
         })
 
+#approve cell number, create user
 @app.route('/api/v1.0/phoneNumber-approvement/post', methods=['POST'])
 def cellNumber_approvement_api():
     data = request.get_json() if request.get_json() else {}
@@ -95,6 +97,7 @@ def cellNumber_approvement_api():
         'message': {'phone number': cellNumber, 'userId': userId}
         })
 
+#create new object
 @app.route('/api/v1.0/new-<object_type>/post', methods=['POST'])
 def create_object_api(object_type):
     data = request.get_json()
@@ -122,9 +125,16 @@ def create_object_api(object_type):
         'status': config.HTML_STATUS_CODE['Success'],
         'message': message})
 
+#query to db
 @app.route('/api/v1.0/<query_type>-query/get', methods=['POST'])
 def query_api(query_type):
     data = request.get_json() if request.get_json() else {}
+    if query_type in config.LOCATION_QUERY:
+        result_list = utils.location_query(data, query_type)
+        return jsonify(result_list)
+    elif query_type in config.REGEX_QUERY:
+        result_list = utils.regex_query(data, query_type)
+        return jsonify(result_list)
     (l1, l2) = utils.query_range(data)
     result_list = utils.query_result(data, query_type, l1, l2)
     return jsonify({
@@ -133,19 +143,23 @@ def query_api(query_type):
         'found records': len(result_list)
         })
 
-#like and view products
-@app.route('/api/v1.0/<action_type>-product/put', methods=['PUT'])
-def like_view_api(action_type):
+#like and view
+@app.route('/api/v1.0/<action_type>-<scope>/put', methods=['PUT'])
+def like_view_api(action_type, scope):
     data = request.get_json() if request.get_json() else {}
-    if not utils.like_view_validator(data)[0]:
-        return jsonify(utils.like_view_validator(data)[1])
-    action_result = utils.like_view_action(data, action_type)
+    if not utils.like_view_validator(data, scope)[0]:
+        return jsonify(utils.like_view_validator(data, scope)[1])
+    action_result = utils.like_view_action(data, action_type, scope)
     if not action_result[0]:
         return jsonify(action_result[1])
     (len1, len2) = action_result[1]
+    if scope == 'product':
+        msg = ('productId', data['productId'])
+    elif scope == 'shop':
+        msg = ('shopId', data['shopId'])
     return jsonify({
         'status': config.HTML_STATUS_CODE['Success'],
-        'message': {'productId': data['productId'], 'viewedNumber': len1, 'likedNumber': len2}
+        'message': {msg[0]: msg[1], 'viewedNumber': len1, 'likedNumber': len2}
         })
 
 @app.route('/', methods=['GET'])
