@@ -111,19 +111,14 @@ def create_object_api(object_type):
             'message': "The image can not be saved!"
             })
     if 'product' in object_type:
-        models.Product.create(**record)
-        shop_result = db.session.query(models.Shop).filter_by(shopId = record['shopId']).first()
-        products_list = copy.deepcopy(shop_result.productsList)
-        products_list.append(record['productId'])
-        shop_result.productsList = products_list
-        db.session.commit()
-        message = {'productId': record['productId']}
+        return jsonify(utils.insert_product(record))
     elif 'shop' in object_type:
-        models.Shop.create(**record)
-        message = {'shopId': record['shopId']}
+        return jsonify(utils.insert_shop(record))
+    elif 'category' in object_type:
+        return jsonify(utils.insert_category(record))
     return jsonify({
-        'status': config.HTML_STATUS_CODE['Success'],
-        'message': message})
+        'status': config.HTML_STATUS_CODE['NotAcceptable'],
+        'message': object_type + " is not valid!"})
 
 #query to db
 @app.route('/api/v1.0/<query_type>-query/get', methods=['POST'])
@@ -135,6 +130,8 @@ def query_api(query_type):
     elif query_type in config.REGEX_QUERY:
         result_list = utils.regex_query(data, query_type)
         return jsonify(result_list)
+    elif query_type == 'category':
+        return jsonify(utils.category_query(data, query_type))
     (l1, l2) = utils.query_range(data)
     result_list = utils.query_result(data, query_type, l1, l2)
     return jsonify({

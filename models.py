@@ -129,21 +129,17 @@ class Category(BaseMixin, db.Model):
 	createdDatetime = db.Column(db.String(20))
 	modified_on = db.Column(db.DateTime(), onupdate=datetime.datetime.now)
 	title = db.Column(db.String(200), index=True)
-	description = db.Column(db.Text())
-	image = db.Column(JSON)
+	childCategories = db.Column(JSON)
+	parentCategory = db.Column(db.String(200))
 	productsList = db.Column(JSON)
-	subsetList = db.Column(JSON)
-	viewed = db.Column(db.Integer())
 
-	def __init__(self, categoryId, createdDatetime, title, description=None,
-		image=[], productsList=[], subsetList=[], viewed=0):
+	def __init__(self, categoryId, createdDatetime, title, childCategories=[],
+		parentCategory=None, productsList=[]):
 		self.categoryId = categoryId
 		self.createdDatetime = createdDatetime
 		self.title = title
-		self.description = description
-		self.image = image
+		self.childCategories = childCategories
+		self.parentCategory = parentCategory
 		self.productsList = productsList
-		self.subsetList = subsetList
-		self.viewed = viewed
 
 db.create_all()

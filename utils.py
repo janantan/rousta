@@ -9,6 +9,7 @@ import base64
 import uuid
 import copy
 import os
+import re
 import config, models
 
 #Config MongoDB
@@ -100,6 +101,8 @@ def input_validator(data, object_type):
 	if 'product' in object_type:
 		if 'category' not in data.keys():
 			return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "category is missed!"}
+		#if 'categoryId' not in data.keys():
+			#return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "categoryId is missed!"}
 		if 'shopId' not in data.keys():
 			return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "shopId is missed!"}
 	return False
@@ -142,20 +145,70 @@ def make_record(data, object_type, record):
 	if 'product' in object_type:
 		record['productId'] = objectId
 		record['shopId'] = data['shopId']
+		#record['categoryId'] = data['categoryId']
 		record['category'] = data['category']
+		record['description'] = data['description'] if 'description' in data.keys() else None
 		record['price'] = data['price'] if 'price' in data.keys() else (1)
 		record['ifUsed'] = data['ifUsed'] if 'ifUsed' in data.keys() else False
 		record['city'] = data['city'] if 'city' in data.keys() else None
 	elif 'shop' in object_type:
 		record['shopId'] = objectId
 		record['address'] = data['address'] if 'address' in data.keys() else None
+		record['description'] = data['description'] if 'description' in data.keys() else None
 		record['phoneNumber'] = data['phoneNumber'] if 'phoneNumber' in data.keys() else None
 		record['bankAcountsInformation'] = data['bankAcountsInformation'] if 'bankAcountsInformation' in data.keys() else []
 		record['shopLink'] = "http://rstaak.ir/"
+	elif 'category' in object_type:
+		record['categoryId'] = objectId
+		record['parentCategory'] = data['parentCategory'] if 'parentCategory' in data.keys() else None
+		del record['owner']
+		del record['imageList']
 	record['title'] = data['title']
-	record['description'] = data['description'] if 'description' in data.keys() else None
 	record['createdDatetime'] = jdatetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S')
 	return record
+
+def insert_product(record):
+	mongo_cursor = config_mongodb()
+	fault_return = {'status': config.HTML_STATUS_CODE['NotFound'],
+			'message': "The Parent does not Exist!"}
+	shop_result = db.session.query(models.Shop).filter_by(shopId = record['shopId']).first()
+	if not shop_result:
+		return (fault_return)
+	#category_result = mongo_cursor.category.find_one({'categoryId': record['categoryId']})
+	#if not category_result:
+		#return jsonify(fault_return)
+	products_list = copy.deepcopy(shop_result.productsList)
+	products_list.append(record['productId'])
+	#catProductsList = category_result['productsList']
+	#catProductsList.append({'title': record['title'], 'productId': record['productId']})
+	models.Product.create(**record)
+	shop_result.productsList = products_list
+	db.session.commit()
+	#mongo_cursor.category.update_many({'categoryId': record['categoryId']}, {'$set':{'productsList': catProductsList}})
+	return ({'status': config.HTML_STATUS_CODE['Success'],
+		'message': {'productId': record['productId']}})
+
+def insert_shop(record):
+	models.Shop.create(**record)
+	return ({'status': config.HTML_STATUS_CODE['Success'],
+		'message': {'shopId': record['shopId']}})
+
+def insert_category(record):
+	mongo_cursor = config_mongodb()
+	if record['parentCategory']:
+		parent = mongo_cursor.category.find_one({'categoryId': record['parentCategory']})
+		if not parent:
+			return ({'status': config.HTML_STATUS_CODE['NotFound'],
+				'message': "The Parent does not Exist!"})
+		childCategories = parent['childCategories']
+		childCategories.append({'title': record['title'], 'categoryId': record['categoryId']})
+		mongo_cursor.category.update_many({'categoryId': record['parentCategory']},
+			{'$set':{'childCategories': childCategories}})
+	record['childCategories'] = []
+	record['productsList'] = []
+	mongo_cursor.category.insert_one(record)
+	return ({'status': config.HTML_STATUS_CODE['Success'],
+		'message': {'categoryId': record['categoryId']}})
 
 def query_range(data):
 	number = data['number'] if 'number' in data.keys() else 50
@@ -180,6 +233,46 @@ def query_result(data, query_type, l1, l2):
 		model = ({'userId': objectId}, models.User)
 		result = filter_query(data, model, objectId, l1, l2)
 		return user_model(result)
+
+def filter_query(data, model, objectId, l1, l2):
+	if objectId:
+		result = model[1].query.filter_by(**model[0])
+	else:
+		q = {}
+		for key, value in data.items():
+			if (value) and key not in ['number', 'factor', 'userId']:
+				q[key] = value
+		result = list(model[1].query.filter_by(**q).order_by(model[1].createdDatetime))[-(l1+1):-(l2+1):-1]
+	return result
+
+def category_query(data, query_type):
+	mongo_cursor = config_mongodb()
+	objectId = data['categoryId'] if 'categoryId' in data.keys() else None
+	if objectId:
+		result = []
+		result.append(mongo_cursor.category.find_one({'categoryId': objectId}))
+		return category_model(result)
+	child = data['child'] if 'child' in data.keys() else False
+	if child:
+		parentId = data['parentId'] if 'parentId' in data.keys() else None
+		if not parentId: return ({'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "parentId is missed!"})
+		return category_model(mongo_cursor.category.find({'parentCategory': parentId}))
+	return category_model(mongo_cursor.category.find({'parentCategory': None}))
+
+def adRegex_query_postgresql(data):
+	pattern = '/^%{}%'.format(data['product'])
+	#result = models.Category.query.filter(models.Category.productsList.ilike(pattern)).all()
+	result = models.Category.query.filter()
+	for r in result:
+		output = []
+		for item in r.productsList:
+			#if re.search(pattern, item):
+				#output.append((r.))
+			#tsa = m.groups()[0] if m else None
+		#if item.childCategories:
+			#continue
+			print(item.productsList)
+	return {'status': config.HTML_STATUS_CODE['NoContent'], 'message': 'There is no result!'}
 
 def location_query(data, query_type):
 	mongo_cursor = config_mongodb()
@@ -221,6 +314,8 @@ def location_query_result_list(query_type, result):
 	return {'status': config.HTML_STATUS_CODE['NoContent'], 'message': 'There is no result!'}
 
 def regex_query(data, query_type):
+	if query_type == 'adRegex':
+		return adRegex_query_mongo(data)
 	mongo_cursor = config_mongodb()
 	regex_result = []
 	query_list = []
@@ -260,6 +355,34 @@ def regex_query_result_list(result):
 		'message': {'result': result_list}, 'found records': len(result_list)}
 	return {'status': config.HTML_STATUS_CODE['NoContent'], 'message': 'There is no result!'}
 
+def adRegex_query_mongo(data):
+	mongo_cursor = config_mongodb()
+	regex_result = []
+	query_list = []
+	query_list.append({'productsList.title': {'$regex': data['product']}})
+	result = mongo_cursor.category.find({'$and':query_list})
+	for item in result:
+		parent_result = mongo_cursor.category.find_one({'categoryId':item['parentCategory']})
+		parent = {'title': parent_result['title'], 'categoryId': parent_result['categoryId']}
+		category = {'title': item['title'], 'categoryId': item['categoryId']}
+		titles = []
+		for product in item['productsList']: titles.append(product['title'])
+		product = []
+		for title in titles:
+			duplicate_flag = False
+			for pdct in product:
+				if pdct['title'] == title:
+					duplicate_flag = True
+					break
+			if duplicate_flag: continue
+			match = re.search('^'+data['product'], title)
+			if match: product.append({'count': titles.count(title), 'title': title})
+		if not product: continue
+		rec = {'product': product, 'category': category, 'parentCategory': parent}
+		regex_result.append(rec)
+	if regex_result: return {'status': config.HTML_STATUS_CODE['Success'], 'message': {'result': regex_result}}
+	return {'status': config.HTML_STATUS_CODE['NoContent'], 'message': 'There is no result!'}
+
 def all_items_for_location_query(item):
 	rec = {'name': item['name'], 'id': item['id']}
 	if 'ostan' in item.keys():
@@ -271,17 +394,6 @@ def all_items_for_location_query(item):
 	if 'dehestan' in item.keys():
 		rec['dehestan'] = item['dehestan']
 	return rec
-
-def filter_query(data, model, objectId, l1, l2):
-	if objectId:
-		result = model[1].query.filter_by(**model[0])
-	else:
-		q = {}
-		for key, value in data.items():
-			if (value) and key not in ['number', 'factor', 'userId']:
-				q[key] = value
-		result = list(model[1].query.filter_by(**q).order_by(model[1].createdDatetime))[-(l1+1):-(l2+1):-1]
-	return result
 
 def like_view_action(data, action_type, scope):
 	status = config.HTML_STATUS_CODE['Duplicate']
@@ -373,6 +485,19 @@ def shop_model(result, userId):
 		'viewedNumber' : len(r.viewList),
 		'likedNumber': len(r.likeList),
 		'likeFlag': likeFlag
+		}
+		result_list.append(result_dict)
+	return result_list
+
+def category_model(result):
+	result_list = []
+	for r in result:
+		result_dict = {
+		'title': r['title'],
+		'categoryId': r['categoryId'],
+		'createdDatetime': r['createdDatetime'],
+		'childCategories': r['childCategories'],
+		'parentCategory': r['parentCategory']
 		}
 		result_list.append(result_dict)
 	return result_list
