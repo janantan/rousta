@@ -54,31 +54,31 @@ class Product(BaseMixin, db.Model):
 	modified_on = db.Column(db.DateTime(), onupdate=datetime.datetime.now)
 	owner = db.Column(db.String(200), index=True)
 	title = db.Column(db.String(200), index=True)
-	category = db.Column(db.String(300))
+	categoryId = db.Column(db.String(200))
 	description = db.Column(db.Text())
 	price = db.Column(db.Integer())
 	imageList = db.Column(JSON)
 	ifUsed = db.Column(db.Boolean())
-	city = db.Column(db.String(100))
+	rostaakLocation = db.Column(JSON)
 	shopId = db.Column(db.String(200))
 	byer = db.Column(db.String(200))
 	ordered = db.Column(db.Integer())
 	viewList = db.Column(JSON)
 	likeList = db.Column(JSON)
 
-	def __init__(self, productId, createdDatetime, owner, title, category,
-		shopId, description=None, price=None, imageList=[], ifUsed=False,
-		city=None, byer=None, ordered=0, viewList=[], likeList=[]):
+	def __init__(self, productId, createdDatetime, owner, title, categoryId,
+		shopId, rostaakLocation, description=None, price=None, imageList=[],
+		ifUsed=False, byer=None, ordered=0, viewList=[], likeList=[]):
 		self.productId = productId
 		self.createdDatetime = createdDatetime
 		self.owner = owner
 		self.title = title
-		self.category = category
+		self.categoryId = categoryId
 		self.description = description
 		self.price = price
 		self.imageList = imageList
 		self.ifUsed = ifUsed
-		self.city = city
+		self.rostaakLocation = rostaakLocation
 		self.shopId = shopId
 		self.byer = byer
 		self.ordered = ordered

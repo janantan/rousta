@@ -120,6 +120,18 @@ def create_object_api(object_type):
         'status': config.HTML_STATUS_CODE['NotAcceptable'],
         'message': object_type + " is not valid!"})
 
+#delete an object
+@app.route('/api/v1.0/delete-<object_type>/delete', methods=["DELETE"])
+def delete_object_api(object_type):
+    data = request.get_json()
+    if utils.delete_validator(data, object_type):
+        return jsonify(utils.delete_validator(data, object_type))
+    if utils.delete_object(data, object_type):
+        return jsonify(utils.delete_object(data, object_type))
+    return jsonify({
+        'status': config.HTML_STATUS_CODE['Success'],
+        'message': object_type + ": '"+data[object_type+'Id']+"' deleted successfully!"})
+
 #query to db
 @app.route('/api/v1.0/<query_type>-query/get', methods=['POST'])
 def query_api(query_type):

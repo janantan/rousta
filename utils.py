@@ -99,12 +99,29 @@ def input_validator(data, object_type):
 	if 'title' not in data.keys():
 		return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "title is missed!"}
 	if 'product' in object_type:
-		if 'category' not in data.keys():
-			return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "category is missed!"}
-		#if 'categoryId' not in data.keys():
-			#return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "categoryId is missed!"}
+		if 'categoryId' not in data.keys():
+			return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "categoryId is missed!"}
 		if 'shopId' not in data.keys():
 			return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "shopId is missed!"}
+		if 'rostaakLocation' not in data.keys():
+			return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "rostaakLocation is missed!"}
+	return False
+
+def delete_validator(data, object_type):
+	if 'cellNumber' not in data.keys():
+		return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "cellNumber is missed!"}
+	if object_type == 'product':
+		if 'productId' not in data.keys():
+			return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "productId is missed!"}
+	elif object_type == 'shop':
+		if 'shopId' not in data.keys():
+			return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "shopId is missed!"}
+	elif object_type == 'category':
+		if 'categoryId' not in data.keys():
+			return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "categoryId is missed!"}
+	elif object_type == 'user':
+		if 'userId' not in data.keys():
+			return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "userId is missed!"}
 	return False
 
 def like_view_validator(data, scope):
@@ -145,12 +162,11 @@ def make_record(data, object_type, record):
 	if 'product' in object_type:
 		record['productId'] = objectId
 		record['shopId'] = data['shopId']
-		#record['categoryId'] = data['categoryId']
-		record['category'] = data['category']
+		record['categoryId'] = data['categoryId']
+		record['rostaakLocation'] = transform_rostaak_location(data['rostaakLocation'])
 		record['description'] = data['description'] if 'description' in data.keys() else None
 		record['price'] = data['price'] if 'price' in data.keys() else (1)
 		record['ifUsed'] = data['ifUsed'] if 'ifUsed' in data.keys() else False
-		record['city'] = data['city'] if 'city' in data.keys() else None
 	elif 'shop' in object_type:
 		record['shopId'] = objectId
 		record['address'] = data['address'] if 'address' in data.keys() else None
@@ -167,6 +183,29 @@ def make_record(data, object_type, record):
 	record['createdDatetime'] = jdatetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S')
 	return record
 
+def transform_rostaak_location(data):
+	mongo_cursor = config_mongodb()
+	if data['type'] == 'abadi':
+		abadi = mongo_cursor.Abadi.find_one({'id': data['id']})
+		rostaakLocation = {'type': data['type'], 'name': abadi['name'],
+		'ostan': abadi['ostan']['name'], 'shahrestan': abadi['shahrestan']['name'],
+		'bakhsh': abadi['bakhsh']['name'], 'dehestan': abadi['dehestan']['name']}
+	if data['type'] == 'dehestan':
+		dehestan = mongo_cursor.Dehestan.find_one({'id': data['id']})
+		rostaakLocation = {'type': data['type'], 'name': dehestan['name'],
+		'ostan': dehestan['ostan']['name'], 'shahrestan': dehestan['shahrestan']['name'],
+		'bakhsh': dehestan['bakhsh']['name']}
+	if data['type'] == 'shahr':
+		shahr = mongo_cursor.Shahr.find_one({'id': data['id']})
+		rostaakLocation = {'type': data['type'], 'name': shahr['name'],
+		'ostan': shahr['ostan']['name'], 'shahrestan': shahr['shahrestan']['name'],
+		'bakhsh': shahr['bakhsh']['name']}
+	if data['type'] == 'shahrestan':
+		shahrestan = mongo_cursor.Shahrestan.find_one({'id': data['id']})
+		rostaakLocation = {'type': data['type'], 'name': shahrestan['name'],
+		'ostan': shahrestan['ostan']['name']}
+	return rostaakLocation
+
 def insert_product(record):
 	mongo_cursor = config_mongodb()
 	fault_return = {'status': config.HTML_STATUS_CODE['NotFound'],
@@ -174,17 +213,17 @@ def insert_product(record):
 	shop_result = db.session.query(models.Shop).filter_by(shopId = record['shopId']).first()
 	if not shop_result:
 		return (fault_return)
-	#category_result = mongo_cursor.category.find_one({'categoryId': record['categoryId']})
-	#if not category_result:
-		#return jsonify(fault_return)
+	category_result = mongo_cursor.category.find_one({'categoryId': record['categoryId']})
+	if not category_result:
+		return jsonify(fault_return)
 	products_list = copy.deepcopy(shop_result.productsList)
 	products_list.append(record['productId'])
-	#catProductsList = category_result['productsList']
-	#catProductsList.append({'title': record['title'], 'productId': record['productId']})
+	catProductsList = category_result['productsList']
+	catProductsList.append({'title': record['title'], 'productId': record['productId']})
 	models.Product.create(**record)
 	shop_result.productsList = products_list
 	db.session.commit()
-	#mongo_cursor.category.update_many({'categoryId': record['categoryId']}, {'$set':{'productsList': catProductsList}})
+	mongo_cursor.category.update_many({'categoryId': record['categoryId']}, {'$set':{'productsList': catProductsList}})
 	return ({'status': config.HTML_STATUS_CODE['Success'],
 		'message': {'productId': record['productId']}})
 
@@ -209,6 +248,33 @@ def insert_category(record):
 	mongo_cursor.category.insert_one(record)
 	return ({'status': config.HTML_STATUS_CODE['Success'],
 		'message': {'categoryId': record['categoryId']}})
+
+def delete_object(data, object_type):
+	if object_type == 'product':
+		if db.session.query(models.Product).filter_by(productId = data['productId']).first():
+			db.session.query(models.Product).filter_by(productId = data['productId']).delete()
+			db.session.commit()
+		else:
+			return {'status': config.HTML_STATUS_CODE['NotFound'], 'message': object_type+"Id not found!"}
+	if object_type == 'shop':
+		if db.session.query(models.Shop).filter_by(shopId = data['shopId']).first():
+			db.session.query(models.Shop).filter_by(shopId = data['shopId']).delete()
+			db.session.commit()
+		else:
+			return {'status': config.HTML_STATUS_CODE['NotFound'], 'message': object_type+"Id not found!"}
+	if object_type == 'user':
+		if db.session.query(models.User).filter_by(userId = data['userId']).first():
+			db.session.query(models.User).filter_by(userId = data['userId']).delete()
+			db.session.commit()
+		else:
+			return {'status': config.HTML_STATUS_CODE['NotFound'], 'message': object_type+"Id not found!"}
+	if object_type == 'category':
+		mongo_cursor = config_mongodb()
+		if mongo_cursor.category.find_one({'categoryId': data['categoryId']}):
+			mongo_cursor.category.remove({'categoryId': data['categoryId']})
+		else:
+			return {'status': config.HTML_STATUS_CODE['NotFound'], 'message': object_type+"Id not found!"}
+	return False
 
 def query_range(data):
 	number = data['number'] if 'number' in data.keys() else 50
@@ -251,13 +317,16 @@ def category_query(data, query_type):
 	if objectId:
 		result = []
 		result.append(mongo_cursor.category.find_one({'categoryId': objectId}))
-		return category_model(result)
+		return ({'status': config.HTML_STATUS_CODE['Success'],
+			'message': {'result': category_model(result)}})
 	child = data['child'] if 'child' in data.keys() else False
 	if child:
 		parentId = data['parentId'] if 'parentId' in data.keys() else None
 		if not parentId: return ({'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "parentId is missed!"})
-		return category_model(mongo_cursor.category.find({'parentCategory': parentId}))
-	return category_model(mongo_cursor.category.find({'parentCategory': None}))
+		return ({'status': config.HTML_STATUS_CODE['Success'],
+			'message': {'result': category_model(mongo_cursor.category.find({'parentCategory': parentId}))}})
+	return ({'status': config.HTML_STATUS_CODE['Success'],
+		'message': {'result': category_model(mongo_cursor.category.find({'parentCategory': None}))}})
 
 def adRegex_query_postgresql(data):
 	pattern = '/^%{}%'.format(data['product'])
@@ -452,12 +521,12 @@ def product_model(result, userId):
 		'createdDatetime': r.createdDatetime,
 		'modified_on': r.modified_on,
 		'title' : r.title,
-		'category' : r.category,
+		'categoryId' : r.categoryId,
 		'description' : r.description,
 		'price' : r.price,
 		'imageList' : r.imageList,
 		'ifUsed' : r.ifUsed,
-		'city' : r.city,
+		'rostaakLocation' : r.rostaakLocation,
 		'viewedNumber' : len(r.viewList),
 		'likedNumber': len(r.likeList),
 		'likeFlag': likeFlag
