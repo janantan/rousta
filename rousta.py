@@ -144,6 +144,8 @@ def query_api(query_type):
         return jsonify(result_list)
     elif query_type == 'category':
         return jsonify(utils.category_query(data, query_type))
+    elif query_type == 'specialShop':
+        return jsonify(utils.special_shop_query(data))
     (l1, l2) = utils.query_range(data)
     result_list = utils.query_result(data, query_type, l1, l2)
     return jsonify({

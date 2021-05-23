@@ -55,20 +55,22 @@ class Product(BaseMixin, db.Model):
 	owner = db.Column(db.String(200), index=True)
 	title = db.Column(db.String(200), index=True)
 	categoryId = db.Column(db.String(200))
+	categoryName = db.Column(db.String(200))
 	description = db.Column(db.Text())
 	price = db.Column(db.Integer())
 	imageList = db.Column(JSON)
 	ifUsed = db.Column(db.Boolean())
 	rostaakLocation = db.Column(JSON)
 	shopId = db.Column(db.String(200))
+	shopName = db.Column(db.String(200))
 	byer = db.Column(db.String(200))
 	ordered = db.Column(db.Integer())
 	viewList = db.Column(JSON)
 	likeList = db.Column(JSON)
 
 	def __init__(self, productId, createdDatetime, owner, title, categoryId,
-		shopId, rostaakLocation, description=None, price=None, imageList=[],
-		ifUsed=False, byer=None, ordered=0, viewList=[], likeList=[]):
+		shopId, rostaakLocation, shopName, categoryName,description=None, price=None,
+		imageList=[], ifUsed=False, byer=None, ordered=0, viewList=[], likeList=[]):
 		self.productId = productId
 		self.createdDatetime = createdDatetime
 		self.owner = owner

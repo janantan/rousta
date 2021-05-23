@@ -220,6 +220,8 @@ def insert_product(record):
 	products_list.append(record['productId'])
 	catProductsList = category_result['productsList']
 	catProductsList.append({'title': record['title'], 'productId': record['productId']})
+	record['shopName'] = shop_result.title
+	record['categoryName'] = category_result['title']
 	models.Product.create(**record)
 	shop_result.productsList = products_list
 	db.session.commit()
@@ -327,6 +329,24 @@ def category_query(data, query_type):
 			'message': {'result': category_model(mongo_cursor.category.find({'parentCategory': parentId}))}})
 	return ({'status': config.HTML_STATUS_CODE['Success'],
 		'message': {'result': category_model(mongo_cursor.category.find({'parentCategory': None}))}})
+
+def special_shop_query(data):
+	mongo_cursor = config_mongodb()
+	shopId = data['shopId'] if 'shopId' in data.keys() else None
+	if not shopId: return ({'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "shopId is missed!"})
+	shop_result = models.Shop.query.filter_by(**{'shopId': shopId}).first()
+	products = []
+	for productId in shop_result.productsList:
+		product_result = models.Product.query.filter_by(**{'productId': productId}).first()
+		product = {'title': product_result.title, 'productId': product_result.productId,
+		'categoryId': product_result.categoryId}
+		category = mongo_cursor.category.find_one({'categoryId': product_result.categoryId})
+		parentCategory = mongo_cursor.category.find_one({'categoryId': category['parentCategory']})
+		product['categoryName'] = category['title']
+		product['parentCategory'] = category['parentCategory']
+		product['parentCategoryName'] = parentCategory['title'] if parentCategory else None
+		products.append(product)
+	return ({'status': config.HTML_STATUS_CODE['Success'], 'message': {'result': products}})
 
 def adRegex_query_postgresql(data):
 	pattern = '/^%{}%'.format(data['product'])
@@ -518,10 +538,12 @@ def product_model(result, userId):
 		'productId' : r.productId,
 		'owner' : r.owner,
 		'shopId': r.shopId,
+		'shopName': r.shopName,
 		'createdDatetime': r.createdDatetime,
 		'modified_on': r.modified_on,
 		'title' : r.title,
 		'categoryId' : r.categoryId,
+		'categoryName' : r.categoryName,
 		'description' : r.description,
 		'price' : r.price,
 		'imageList' : r.imageList,
