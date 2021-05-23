@@ -60,6 +60,7 @@ class Product(BaseMixin, db.Model):
 	price = db.Column(db.Integer())
 	imageList = db.Column(JSON)
 	ifUsed = db.Column(db.Boolean())
+	ifPublished = db.Column(db.Boolean())
 	rostaakLocation = db.Column(JSON)
 	shopId = db.Column(db.String(200))
 	shopName = db.Column(db.String(200))
@@ -70,7 +71,8 @@ class Product(BaseMixin, db.Model):
 
 	def __init__(self, productId, createdDatetime, owner, title, categoryId,
 		shopId, rostaakLocation, shopName, categoryName,description=None, price=None,
-		imageList=[], ifUsed=False, byer=None, ordered=0, viewList=[], likeList=[]):
+		imageList=[], ifUsed=False, ifPublished=True, byer=None, ordered=0, viewList=[],
+		likeList=[]):
 		self.productId = productId
 		self.createdDatetime = createdDatetime
 		self.owner = owner
@@ -80,6 +82,7 @@ class Product(BaseMixin, db.Model):
 		self.price = price
 		self.imageList = imageList
 		self.ifUsed = ifUsed
+		self.ifPublished = ifPublished
 		self.rostaakLocation = rostaakLocation
 		self.shopId = shopId
 		self.byer = byer
@@ -132,16 +135,18 @@ class Category(BaseMixin, db.Model):
 	modified_on = db.Column(db.DateTime(), onupdate=datetime.datetime.now)
 	title = db.Column(db.String(200), index=True)
 	childCategories = db.Column(JSON)
+	imageList = db.Column(JSON)
 	parentCategory = db.Column(db.String(200))
 	productsList = db.Column(JSON)
 
 	def __init__(self, categoryId, createdDatetime, title, childCategories=[],
-		parentCategory=None, productsList=[]):
+		parentCategory=None, productsList=[], imageList=[]):
 		self.categoryId = categoryId
 		self.createdDatetime = createdDatetime
 		self.title = title
 		self.childCategories = childCategories
 		self.parentCategory = parentCategory
 		self.productsList = productsList
+		self.imageList = imageList
 
 db.create_all()

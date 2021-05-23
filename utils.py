@@ -167,6 +167,7 @@ def make_record(data, object_type, record):
 		record['description'] = data['description'] if 'description' in data.keys() else None
 		record['price'] = data['price'] if 'price' in data.keys() else (1)
 		record['ifUsed'] = data['ifUsed'] if 'ifUsed' in data.keys() else False
+		record['ifPublished'] = data['ifPublished'] if 'ifPublished' in data.keys() else True
 	elif 'shop' in object_type:
 		record['shopId'] = objectId
 		record['address'] = data['address'] if 'address' in data.keys() else None
@@ -178,7 +179,6 @@ def make_record(data, object_type, record):
 		record['categoryId'] = objectId
 		record['parentCategory'] = data['parentCategory'] if 'parentCategory' in data.keys() else None
 		del record['owner']
-		del record['imageList']
 	record['title'] = data['title']
 	record['createdDatetime'] = jdatetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S')
 	return record
@@ -335,6 +335,7 @@ def special_shop_query(data):
 	shopId = data['shopId'] if 'shopId' in data.keys() else None
 	if not shopId: return ({'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "shopId is missed!"})
 	shop_result = models.Shop.query.filter_by(**{'shopId': shopId}).first()
+	if not shop_result: return ({'status': config.HTML_STATUS_CODE['NotFound'], 'message': "shopId not found!"})
 	products = []
 	for productId in shop_result.productsList:
 		product_result = models.Product.query.filter_by(**{'productId': productId}).first()
@@ -345,8 +346,30 @@ def special_shop_query(data):
 		product['categoryName'] = category['title']
 		product['parentCategory'] = category['parentCategory']
 		product['parentCategoryName'] = parentCategory['title'] if parentCategory else None
+		product['imageList'] = category['imageList'] if 'imageList' in category.keys() else []
 		products.append(product)
-	return ({'status': config.HTML_STATUS_CODE['Success'], 'message': {'result': products}})
+	#return ({'status': config.HTML_STATUS_CODE['Success'], 'message': {'result': products}})
+	parents_list = []
+	parents = {}
+	for product in products:
+		if product['parentCategoryName'] in parents.keys():
+			if product['categoryName'] in parents[product['parentCategoryName']].keys():
+				N = parents[product['parentCategoryName']][product['categoryName']]['productNumbers']
+				parents[product['parentCategoryName']][product['categoryName']]['productNumbers'] = N + 1
+			else:
+				parents[product['parentCategoryName']][product['categoryName']] = {'productNumbers': 1,
+				'categoryId': product['categoryId'], 'categoryImage': product['imageList']}
+		else:
+			parents[product['parentCategoryName']] = {
+			'parentCategoryId': product['parentCategory'],
+			product['categoryName']: {'productNumbers': 1, 'categoryId': product['categoryId'],
+			'categoryImage': product['imageList']}
+			}
+	for key, value in parents.items():
+		parent = value
+		parent['parentCategoryName'] = key
+		parents_list.append(parent)
+	return ({'status': config.HTML_STATUS_CODE['Success'], 'message': {'result': parents_list}})
 
 def adRegex_query_postgresql(data):
 	pattern = '/^%{}%'.format(data['product'])
@@ -548,6 +571,7 @@ def product_model(result, userId):
 		'price' : r.price,
 		'imageList' : r.imageList,
 		'ifUsed' : r.ifUsed,
+		'ifPublished' : r.ifPublished,
 		'rostaakLocation' : r.rostaakLocation,
 		'viewedNumber' : len(r.viewList),
 		'likedNumber': len(r.likeList),
@@ -588,7 +612,8 @@ def category_model(result):
 		'categoryId': r['categoryId'],
 		'createdDatetime': r['createdDatetime'],
 		'childCategories': r['childCategories'],
-		'parentCategory': r['parentCategory']
+		'parentCategory': r['parentCategory'],
+		'imageList': r['imageList']
 		}
 		result_list.append(result_dict)
 	return result_list
