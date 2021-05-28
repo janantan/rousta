@@ -168,6 +168,7 @@ def make_record(data, object_type, record):
 		record['price'] = data['price'] if 'price' in data.keys() else (1)
 		record['ifUsed'] = data['ifUsed'] if 'ifUsed' in data.keys() else False
 		record['ifPublished'] = data['ifPublished'] if 'ifPublished' in data.keys() else True
+		record['vitrin'] = data['vitrin'] if 'vitrin' in data.keys() else False
 	elif 'shop' in object_type:
 		record['shopId'] = objectId
 		record['address'] = data['address'] if 'address' in data.keys() else None
@@ -337,8 +338,12 @@ def special_shop_query(data):
 	shop_result = models.Shop.query.filter_by(**{'shopId': shopId}).first()
 	if not shop_result: return ({'status': config.HTML_STATUS_CODE['NotFound'], 'message': "shopId not found!"})
 	products = []
+	vitrin_products = []
+	owner = shop_result.owner
 	for productId in shop_result.productsList:
 		product_result = models.Product.query.filter_by(**{'productId': productId}).first()
+		if not product_result:
+			continue
 		product = {'title': product_result.title, 'productId': product_result.productId,
 		'categoryId': product_result.categoryId}
 		category = mongo_cursor.category.find_one({'categoryId': product_result.categoryId})
@@ -348,28 +353,40 @@ def special_shop_query(data):
 		product['parentCategoryName'] = parentCategory['title'] if parentCategory else None
 		product['imageList'] = category['imageList'] if 'imageList' in category.keys() else []
 		products.append(product)
+		if product_result.vitrin: vitrin_products.append(product_result.productId)
 	#return ({'status': config.HTML_STATUS_CODE['Success'], 'message': {'result': products}})
 	parents_list = []
 	parents = {}
 	for product in products:
 		if product['parentCategoryName'] in parents.keys():
-			if product['categoryName'] in parents[product['parentCategoryName']].keys():
-				N = parents[product['parentCategoryName']][product['categoryName']]['productNumbers']
-				parents[product['parentCategoryName']][product['categoryName']]['productNumbers'] = N + 1
-			else:
-				parents[product['parentCategoryName']][product['categoryName']] = {'productNumbers': 1,
-				'categoryId': product['categoryId'], 'categoryImage': product['imageList']}
+			flag = False
+			for i in range(len(parents[product['parentCategoryName']]['childs'])):
+				if product['categoryName'] == parents[product['parentCategoryName']]['childs'][i]['childCategoryName']:
+					N = parents[product['parentCategoryName']]['childs'][i]['productNumbers']
+					parents[product['parentCategoryName']]['childs'][i]['productNumbers'] = N + 1
+					flag = True
+					break
+			if not flag:
+				parents[product['parentCategoryName']]['childs'].append({'childCategoryId': product['categoryId'], 'productNumbers': 1,
+					'childCategoryName': product['categoryName'], 'categoryImage': product['imageList']})
 		else:
+			childs = []
+			childs.append({'childCategoryId': product['categoryId'], 'productNumbers': 1,
+				'childCategoryName': product['categoryName'], 'categoryImage': product['imageList']})
 			parents[product['parentCategoryName']] = {
 			'parentCategoryId': product['parentCategory'],
-			product['categoryName']: {'productNumbers': 1, 'categoryId': product['categoryId'],
-			'categoryImage': product['imageList']}
+			'childs': childs
 			}
 	for key, value in parents.items():
 		parent = value
 		parent['parentCategoryName'] = key
 		parents_list.append(parent)
-	return ({'status': config.HTML_STATUS_CODE['Success'], 'message': {'result': parents_list}})
+	vitrin_result = []
+	for p_id in vitrin_products:
+		vitrin_result.append(models.Product.query.filter_by(**{'productId': p_id}).first())
+	vitrin = product_model(vitrin_result, owner)
+	return ({'status': config.HTML_STATUS_CODE['Success'],
+		'message': {'result': parents_list}, 'vitrin': vitrin})
 
 def adRegex_query_postgresql(data):
 	pattern = '/^%{}%'.format(data['product'])
@@ -442,10 +459,10 @@ def regex_query(data, query_type):
 		else:
 			query_list.append({key: value})
 	if all_flag:
-		regex_result.append(('shahrestan', mongo_cursor.Shahrestan.find({'$and':query_list})))
+		#regex_result.append(('shahrestan', mongo_cursor.Shahrestan.find({'$and':query_list})))
 		regex_result.append(('shahr', mongo_cursor.Shahr.find({'$and':query_list})))
-		regex_result.append(('dehestan', mongo_cursor.Dehestan.find({'$and':query_list})))
-		regex_result.append(('abadi', mongo_cursor.Abadi.find({'$and':query_list})))
+		#regex_result.append(('dehestan', mongo_cursor.Dehestan.find({'$and':query_list})))
+		regex_result.append(('abadi', mongo_cursor.Abadi.find({'abadi_type':'0', '$and':query_list})))
 	else:
 		regex_result.append(mongo_cursor.Abadi.find({'$and':query_list}))
 	return regex_query_result_list(regex_result)
@@ -572,6 +589,7 @@ def product_model(result, userId):
 		'imageList' : r.imageList,
 		'ifUsed' : r.ifUsed,
 		'ifPublished' : r.ifPublished,
+		'vitrin' : r.vitrin,
 		'rostaakLocation' : r.rostaakLocation,
 		'viewedNumber' : len(r.viewList),
 		'likedNumber': len(r.likeList),

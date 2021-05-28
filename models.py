@@ -61,6 +61,7 @@ class Product(BaseMixin, db.Model):
 	imageList = db.Column(JSON)
 	ifUsed = db.Column(db.Boolean())
 	ifPublished = db.Column(db.Boolean())
+	vitrin = db.Column(db.Boolean())
 	rostaakLocation = db.Column(JSON)
 	shopId = db.Column(db.String(200))
 	shopName = db.Column(db.String(200))
@@ -71,8 +72,8 @@ class Product(BaseMixin, db.Model):
 
 	def __init__(self, productId, createdDatetime, owner, title, categoryId,
 		shopId, rostaakLocation, shopName, categoryName,description=None, price=None,
-		imageList=[], ifUsed=False, ifPublished=True, byer=None, ordered=0, viewList=[],
-		likeList=[]):
+		imageList=[], ifUsed=False, ifPublished=True, vitrin=False, byer=None,
+		ordered=0, viewList=[], likeList=[]):
 		self.productId = productId
 		self.createdDatetime = createdDatetime
 		self.owner = owner
@@ -83,6 +84,7 @@ class Product(BaseMixin, db.Model):
 		self.imageList = imageList
 		self.ifUsed = ifUsed
 		self.ifPublished = ifPublished
+		self.vitrin = vitrin
 		self.rostaakLocation = rostaakLocation
 		self.shopId = shopId
 		self.byer = byer
