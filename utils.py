@@ -8,6 +8,7 @@ import random2
 import base64
 import uuid
 import copy
+import json
 import os
 import re
 import config, models
@@ -254,30 +255,77 @@ def insert_category(record):
 
 def delete_object(data, object_type):
 	if object_type == 'product':
-		if db.session.query(models.Product).filter_by(productId = data['productId']).first():
-			db.session.query(models.Product).filter_by(productId = data['productId']).delete()
-			db.session.commit()
-		else:
-			return {'status': config.HTML_STATUS_CODE['NotFound'], 'message': object_type+"Id not found!"}
+		return delete_object_sub_func(object_type, {'productId': data['productId']}, models.Product)
 	if object_type == 'shop':
-		if db.session.query(models.Shop).filter_by(shopId = data['shopId']).first():
-			db.session.query(models.Shop).filter_by(shopId = data['shopId']).delete()
-			db.session.commit()
-		else:
-			return {'status': config.HTML_STATUS_CODE['NotFound'], 'message': object_type+"Id not found!"}
+		return delete_object_sub_func(object_type, {'shopId': data['shopId']}, models.Shop)
 	if object_type == 'user':
-		if db.session.query(models.User).filter_by(userId = data['userId']).first():
-			db.session.query(models.User).filter_by(userId = data['userId']).delete()
-			db.session.commit()
-		else:
-			return {'status': config.HTML_STATUS_CODE['NotFound'], 'message': object_type+"Id not found!"}
+		return delete_object_sub_func(object_type, {'userId': data['userId']}, models.User)
 	if object_type == 'category':
+		return delete_object_sub_func(object_type, {'categoryId': data['categoryId']}, None)
+	return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "wrong api address!"}
+
+def delete_object_sub_func(object_type, data, model):
+	if object_type == 'category':
+		print(data)
 		mongo_cursor = config_mongodb()
-		if mongo_cursor.category.find_one({'categoryId': data['categoryId']}):
-			mongo_cursor.category.remove({'categoryId': data['categoryId']})
+		record = mongo_cursor.category.find_one(data)
+		if record:
+			archive = archive_object(record, object_type)
+			if archive:
+				#delete category from its parent category
+				if record['parentCategory']:
+					parent_result = mongo_cursor.category.find_one({'categoryId': record['parentCategory']})
+					child_list = parent_result['childCategories']
+					child = {}
+					for ch in child_list:
+						if ch['categoryId'] == record['deleted_categoryId']:
+							child = ch
+							break
+					child_list.remove(child)
+					mongo_cursor.category.update_many({'categoryId': record['parentCategory']},
+						{'$set':{'childCategories': child_list}})
+				mongo_cursor.category.remove(data)
+				return {'status': config.HTML_STATUS_CODE['Success'],
+				'message': object_type + ": '"+data['categoryId']+"' deleted successfully!"}
+			else:
+				return {'status': config.HTML_STATUS_CODE['NotImplemented'],
+				'message': "An error occurred while archiving! The object could not be deleted."}
 		else:
 			return {'status': config.HTML_STATUS_CODE['NotFound'], 'message': object_type+"Id not found!"}
-	return False
+	record = db.session.query(model).filter_by(**data).first()
+	if record:
+		record = record.__dict__
+		del record['_sa_instance_state']
+		archive = archive_object(record, object_type)
+		if archive:
+			if object_type == 'product':
+				#delete product from its shop products list
+				shop_result = db.session.query(models.Shop).filter_by(shopId = record['shopId']).first()
+				prouduct_list = copy.deepcopy(shop_result.productsList)
+				if record['deleted_productId'] in prouduct_list:
+					prouduct_list.remove(record['deleted_productId'])
+					shop_result.productsList = prouduct_list
+				#delete product from its category products list
+				mongo_cursor = config_mongodb()
+				cat_result = mongo_cursor.category.find_one({'title':record['categoryName']})
+				productsList = cat_result['productsList']
+				product = {}
+				for p in productsList:
+					if p['productId'] == record['deleted_productId']:
+						product = p
+						break
+				productsList.remove(product)
+				mongo_cursor.category.update_many({'categoryId': cat_result['categoryId']},
+					{'$set':{'productsList': productsList}})
+			db.session.query(model).filter_by(**data).delete()
+			db.session.commit()
+			return {'status': config.HTML_STATUS_CODE['Success'],
+			'message': object_type + ": '"+data[object_type+'Id']+"' deleted successfully!"}
+		else:
+			return {'status': config.HTML_STATUS_CODE['NotImplemented'],
+			'message': "An error occurred while archiving! The object could not be deleted."}
+	else:
+		return {'status': config.HTML_STATUS_CODE['NotFound'], 'message': object_type+"Id not found!"}
 
 def query_range(data):
 	number = data['number'] if 'number' in data.keys() else 50
@@ -552,6 +600,84 @@ def like_view_action(data, action_type, scope):
 	l1, l2 = (len(scope_result.viewList), len(scope_result.likeList))
 	db.session.close()
 	return (True, [l1, l2])
+
+def vitrin_put_data_validator(data):
+	if if_input_exists(data):
+		return if_input_exists(data)
+	if 'cellNumber' not in data.keys():
+		return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "cellNumber is missed!"}
+	if 'virtinPushList' not in data.keys():
+		return {'status': config.HTML_STATUS_CODE['NotAcceptable'],
+		'message': "virtinPushList is missed!"}
+	if 'virtinPopList' not in data.keys():
+		return {'status': config.HTML_STATUS_CODE['NotAcceptable'],
+		'message': "virtinPopList is missed!"}
+	if (not isinstance(data['virtinPushList'], (list, tuple))) or (not isinstance(data['virtinPopList'], (list, tuple))):
+		return {'status': config.HTML_STATUS_CODE['NotAcceptable'],
+		'message': "virtinPushList & virtinPopList must be an array!"}
+	if (not len(data['virtinPushList'])) and (not len(data['virtinPopList'])):
+		return {'status': config.HTML_STATUS_CODE['NotAcceptable'],
+		'message': "virtinPushList or virtinPopList is empty!"}
+	return False
+
+def push_pop_vitrin(data):
+	if vitrin_put_data_validator(data):
+		return vitrin_put_data_validator(data)
+	for productId in data['virtinPushList']:
+		if not models.Product.query.filter_by(**{'productId': productId}).first():
+			return {'status': config.HTML_STATUS_CODE['NotFound'], 'message': productId+" not found!"}
+	for productId in data['virtinPopList']:
+		if not models.Product.query.filter_by(**{'productId': productId}).first():
+			return {'status': config.HTML_STATUS_CODE['NotFound'], 'message': productId+" not found!"}
+	for productId in data['virtinPushList']:
+		product_result = db.session.query(models.Product).filter_by(**{'productId': productId}).first()
+		product_result.vitrin = True
+		db.session.commit()
+	for productId in data['virtinPopList']:
+		product_result = db.session.query(models.Product).filter_by(**{'productId': productId}).first()
+		product_result.vitrin = False
+		db.session.commit()
+	db.session.close()
+	return {'status': config.HTML_STATUS_CODE['Success'], 'message': "successfully done!"}
+
+def archive_object(record, object_type):
+	try:
+		if object_type == 'category':
+			mongo_cursor = config_mongodb()
+			record['deletedDatetime'] = jdatetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S')
+			record['archiveCategorytId'] = str(uuid.uuid4())
+			record['deleted_categoryId'] = record['categoryId']
+			del record['categoryId']
+			mongo_cursor.category_archive.insert_one(record)
+			return True
+		record['deletedDatetime'] = jdatetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S')
+		record['deleted_'+object_type+'Id'] = record[object_type+'Id']
+		del record[object_type+'Id']
+		if object_type == 'user':
+			record['archiveUserId'] = str(uuid.uuid4())
+			models.UserArchive.create(**record)
+		elif object_type == 'product':
+			record['archiveProductId'] = str(uuid.uuid4())
+			models.ProductArchive.create(**record)
+		elif object_type == 'shop':
+			record['archiveShopId'] = str(uuid.uuid4())
+			models.ShopArchive.create(**record)
+		return True
+	except:
+		return False
+
+def test():
+	mongo_cursor = config_mongodb()
+	parent_result = mongo_cursor.category.find_one({'categoryId': "f25037d0-acec-4b81-a5d9-ec80a73c4d02"})
+	child_list = parent_result['childCategories']
+	child = {}
+	for ch in child_list:
+		if ch['categoryId'] == "e354b01e-e265-4d70-8ed6-bc6f9deb1242":
+			child = ch
+			break
+	child_list.remove(child)
+	mongo_cursor.category.update_many({'categoryId': "f25037d0-acec-4b81-a5d9-ec80a73c4d02"},
+		{'$set':{'childCategories': child_list}})
 
 def user_model(result):
 	result_list = []

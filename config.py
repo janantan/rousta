@@ -39,5 +39,6 @@ HTML_STATUS_CODE = {
 'NotFound': 404,
 'Duplicate': 409,
 'SeeOther': 303,
-'NoContent': 204
+'NoContent': 204,
+'NotImplemented': 501
 }

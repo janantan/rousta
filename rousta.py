@@ -126,11 +126,8 @@ def delete_object_api(object_type):
     data = request.get_json()
     if utils.delete_validator(data, object_type):
         return jsonify(utils.delete_validator(data, object_type))
-    if utils.delete_object(data, object_type):
-        return jsonify(utils.delete_object(data, object_type))
-    return jsonify({
-        'status': config.HTML_STATUS_CODE['Success'],
-        'message': object_type + ": '"+data[object_type+'Id']+"' deleted successfully!"})
+    result = utils.delete_object(data, object_type)
+    return jsonify(result)
 
 #query to db
 @app.route('/api/v1.0/<query_type>-query/get', methods=['POST'])
@@ -172,6 +169,13 @@ def like_view_api(action_type, scope):
         'status': config.HTML_STATUS_CODE['Success'],
         'message': {msg[0]: msg[1], 'viewedNumber': len1, 'likedNumber': len2}
         })
+
+#push/pop products in/from vitrin
+@app.route('/api/v1.0/pushpop-vitrin/put', methods=['PUT'])
+def push_pop_vitrin_api():
+    data = request.get_json() if request.get_json() else {}
+    result = utils.push_pop_vitrin(data)
+    return jsonify(result)
 
 @app.route('/', methods=['GET'])
 def home():
