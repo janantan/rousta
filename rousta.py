@@ -28,9 +28,10 @@ app = Flask(__name__)
 
 app.secret_key = 'secret@rousta@password_hash@840'
 app.config['IMAGE_FILE_FOLDER'] = config.IMAGE_FILE_FOLDER
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://{}:{}@{}/{}'.format(
-    config.POSTGRESQL_USERNAME, config.POSTGRESQL_PASSWORD, config.POSTGRESQL_HOST, config.DB_NAME)
+#app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://{}:{}@{}/{}'.format(
+    #config.POSTGRESQL_USERNAME, config.POSTGRESQL_PASSWORD, config.POSTGRESQL_HOST, config.POSTGRESQL_DB_NAME)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://{}:{}@{}/{}'.format(
+    config.MYSQL_USERNAME, config.MYSQL_PASSWORD, config.MYSQL_HOST, config.MYSQL_DB_NAME)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
@@ -81,20 +82,18 @@ def cellNumber_approvement_api():
             'status': config.HTML_STATUS_CODE['NotAcceptable'],
             'message': {'error': 'Duplicated phone number!'}
             })
-    userId = str(uuid.uuid4())
-    shop = utils.make_record({'title': "فروشگاه من"}, 'shop', {'owner': userId})
-    models.Shop.create(**shop)
-    shopList = []
-    shopList.append(shop)
     models.User.create(
         cellNumber=cellNumber,
-        userId=userId,
-        shopList=shopList,
         createdDatetime=jdatetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S')
         )
+    new_user = models.User.query.filter_by(**{'cellNumber': cellNumber}).first()
+    shop = utils.make_record({'title': "فروشگاه من"}, 'shop', {'owner': new_user.userId})
+    shop['owner'] = new_user
+    models.Shop.create(**shop)
+    utils.user_in_mongo_chat_db(new_user)
     return jsonify({
         'status': config.HTML_STATUS_CODE['Success'],
-        'message': {'phone number': cellNumber, 'userId': userId}
+        'message': {'phone number': cellNumber, 'userId': new_user.userId}
         })
 
 #create new object
@@ -127,6 +126,15 @@ def delete_object_api(object_type):
     if utils.delete_validator(data, object_type):
         return jsonify(utils.delete_validator(data, object_type))
     result = utils.delete_object(data, object_type)
+    return jsonify(result)
+
+#edit an object
+@app.route('/api/v1.0/edit-<object_type>/put', methods=["PUT"])
+def edit_object_api(object_type):
+    data = request.get_json()
+    if utils.edit_validator(data, object_type):
+        return jsonify(utils.edit_validator(data, object_type))
+    result = utils.edit_object(data, object_type)
     return jsonify(result)
 
 #query to db
@@ -175,6 +183,30 @@ def like_view_api(action_type, scope):
 def push_pop_vitrin_api():
     data = request.get_json() if request.get_json() else {}
     result = utils.push_pop_vitrin(data)
+    return jsonify(result)
+
+#chat: get method functions for chat
+@app.route('/api/v1.0/chat/<item>/get', methods=['POST'])
+def chat_get_methods(item):
+    data = request.get_json() if request.get_json() else {}
+    if item == 'get-products':
+        result = utils.get_products_forChat(data)
+    elif item == 'get-product-chat':
+        result = utils.get_product_chats(data)
+    elif item == 'get-chat':
+        result = utils.get_chat(data)
+    else:
+        return jsonify({'status': config.HTML_STATUS_CODE['NotFound'], 'message': 'Wrong url!'})
+    return jsonify(result)
+
+#chat: put method functions for chat
+@app.route('/api/v1.0/chat/<item>/put', methods=['PUT'])
+def chat_put_methods(item):
+    data = request.get_json() if request.get_json() else {}
+    if item == 'socket-on':
+        result = utils.socket_on(data)
+    else:
+        return jsonify({'status': config.HTML_STATUS_CODE['NotFound'], 'message': 'Wrong url!'})
     return jsonify(result)
 
 @app.route('/', methods=['GET'])

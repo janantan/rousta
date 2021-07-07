@@ -1,7 +1,7 @@
 from ippanel import Client, Error, HTTPError, ResponseCode
 from werkzeug.utils import secure_filename
 from pymongo import MongoClient
-from rousta import app, db
+from rousta import db
 import datetime
 import jdatetime
 import random2
@@ -21,9 +21,21 @@ def config_mongodb():
 		config.MONGODB_PASSWORD,
 		config.MONGODB_HOST,
 		config.MONGODB_PORT,
-		config.DB_NAME
+		config.MONGO_DB_NAME
 	)
-	cur = MongoClient(uri)[config.DB_NAME]
+	cur = MongoClient(uri)[config.MONGO_DB_NAME]
+	return cur
+
+def config_chat_mongodb():
+	#mongodb://mongodb_user:password@localhost:27017/mongodb_db
+	uri = "mongodb://{}:{}@{}:{}/{}".format(
+		config.MONGODB_USERNAME,
+		config.MONGODB_PASSWORD,
+		config.MONGODB_HOST,
+		config.MONGODB_PORT,
+		config.MONGO_CHAT_DB_NAME
+	)
+	cur = MongoClient(uri)[config.MONGO_CHAT_DB_NAME]
 	return cur
 
 def send_sms(phoneNumber, code):
@@ -125,6 +137,23 @@ def delete_validator(data, object_type):
 			return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "userId is missed!"}
 	return False
 
+def edit_validator(data, object_type):
+	if 'cellNumber' not in data.keys():
+		return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "cellNumber is missed!"}
+	if object_type == 'product':
+		if 'productId' not in data.keys():
+			return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "productId is missed!"}
+	elif object_type == 'shop':
+		if 'shopId' not in data.keys():
+			return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "shopId is missed!"}
+	elif object_type == 'category':
+		if 'categoryId' not in data.keys():
+			return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "categoryId is missed!"}
+	elif object_type == 'user':
+		if 'userId' not in data.keys():
+			return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "userId is missed!"}
+	return False
+
 def like_view_validator(data, scope):
 	if if_input_exists(data):
 		return (False, if_input_exists(data))
@@ -137,6 +166,40 @@ def like_view_validator(data, scope):
 		if 'shopId' not in data.keys():
 			return (False, {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "shopId is missed!"})
 	return (True, None)
+
+def get_products_forChat_validator(data):
+	if if_input_exists(data):
+		return if_input_exists(data)
+	if 'userId' not in data.keys():
+		return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "userId is missed!"}
+	return False
+
+def get_product_chats_validator(data):
+	if if_input_exists(data):
+		return if_input_exists(data)
+	if 'userId' not in data.keys():
+		return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "userId is missed!"}
+	if 'productId' not in data.keys():
+		return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "productId is missed!"}
+	return False
+
+def get_chat_validator(data):
+	if if_input_exists(data):
+		return if_input_exists(data)
+	if 'userId' not in data.keys():
+		return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "userId is missed!"}
+	if 'productId' not in data.keys():
+		return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "productId is missed!"}
+	# if 'chatId' not in data.keys():
+	# 	return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "chatId is missed!"}
+	return False
+
+def socket_on_validator(data):
+	if if_input_exists(data):
+		return if_input_exists(data)
+	if 'userId' not in data.keys():
+		return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "userId is missed!"}
+	return False
 
 def validating_request(data, object_type):
 	if if_input_exists(data):
@@ -162,8 +225,8 @@ def make_record(data, object_type, record):
 			return False
 	if 'product' in object_type:
 		record['productId'] = objectId
-		record['shopId'] = data['shopId']
-		record['categoryId'] = data['categoryId']
+		record['shop'] = data['shopId']
+		record['category'] = data['categoryId']
 		record['rostaakLocation'] = transform_rostaak_location(data['rostaakLocation'])
 		record['description'] = data['description'] if 'description' in data.keys() else None
 		record['price'] = data['price'] if 'price' in data.keys() else (1)
@@ -209,49 +272,47 @@ def transform_rostaak_location(data):
 	return rostaakLocation
 
 def insert_product(record):
-	mongo_cursor = config_mongodb()
-	fault_return = {'status': config.HTML_STATUS_CODE['NotFound'],
-			'message': "The Parent does not Exist!"}
-	shop_result = db.session.query(models.Shop).filter_by(shopId = record['shopId']).first()
-	if not shop_result:
+	fault_return = {'status': config.HTML_STATUS_CODE['NotFound']}
+	owner_result = models.User.query.filter_by(userId = record['owner']).first()
+	if not owner_result:
+		fault_return['message'] = "The Owner does not Exist!"
 		return (fault_return)
-	category_result = mongo_cursor.category.find_one({'categoryId': record['categoryId']})
+	shop_result = models.Shop.query.filter_by(shopId = record['shop']).first()
+	if not shop_result:
+		fault_return['message'] = "The Shop does not Exist!"
+		return (fault_return)
+	category_result = models.Childcategory.query.filter_by(categoryId = record['category']).first()
 	if not category_result:
+		fault_return['message'] = "The Category does not Exist!"
 		return jsonify(fault_return)
-	products_list = copy.deepcopy(shop_result.productsList)
-	products_list.append(record['productId'])
-	catProductsList = category_result['productsList']
-	catProductsList.append({'title': record['title'], 'productId': record['productId']})
-	record['shopName'] = shop_result.title
-	record['categoryName'] = category_result['title']
+	record['owner'] = owner_result
+	record['shop'] = shop_result
+	record['category'] = category_result
 	models.Product.create(**record)
-	shop_result.productsList = products_list
 	db.session.commit()
-	mongo_cursor.category.update_many({'categoryId': record['categoryId']}, {'$set':{'productsList': catProductsList}})
-	return ({'status': config.HTML_STATUS_CODE['Success'],
-		'message': {'productId': record['productId']}})
+	return ({'status': config.HTML_STATUS_CODE['Success'], 'message': 'Successfully created!'})
 
 def insert_shop(record):
+	owner_result = models.User.query.filter_by(userId = record['owner']).first()
+	if not owner_result:
+		return ({'status': config.HTML_STATUS_CODE['NotFound'],
+			'message': "The Owner does not Exist!"})
+	record['owner'] = owner_result
 	models.Shop.create(**record)
-	return ({'status': config.HTML_STATUS_CODE['Success'],
-		'message': {'shopId': record['shopId']}})
+	return ({'status': config.HTML_STATUS_CODE['Success'], 'message': 'Successfully created!'})
 
 def insert_category(record):
-	mongo_cursor = config_mongodb()
 	if record['parentCategory']:
-		parent = mongo_cursor.category.find_one({'categoryId': record['parentCategory']})
+		parent = models.Parentcategory.query.filter_by(categoryId = record['parentCategory']).first()
 		if not parent:
 			return ({'status': config.HTML_STATUS_CODE['NotFound'],
 				'message': "The Parent does not Exist!"})
-		childCategories = parent['childCategories']
-		childCategories.append({'title': record['title'], 'categoryId': record['categoryId']})
-		mongo_cursor.category.update_many({'categoryId': record['parentCategory']},
-			{'$set':{'childCategories': childCategories}})
-	record['childCategories'] = []
-	record['productsList'] = []
-	mongo_cursor.category.insert_one(record)
-	return ({'status': config.HTML_STATUS_CODE['Success'],
-		'message': {'categoryId': record['categoryId']}})
+		record['parent'] = parent
+		models.Childcategory.create(**record)
+	else:
+		del record['parentCategory']
+		models.Parentcategory.create(**record)
+	return ({'status': config.HTML_STATUS_CODE['Success'], 'message': 'Successfully created!'})
 
 def delete_object(data, object_type):
 	if object_type == 'product':
@@ -265,67 +326,161 @@ def delete_object(data, object_type):
 	return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "wrong api address!"}
 
 def delete_object_sub_func(object_type, data, model):
+	mongo_cursor = config_mongodb()
 	if object_type == 'category':
-		print(data)
-		mongo_cursor = config_mongodb()
-		record = mongo_cursor.category.find_one(data)
-		if record:
-			archive = archive_object(record, object_type)
-			if archive:
-				#delete category from its parent category
-				if record['parentCategory']:
-					parent_result = mongo_cursor.category.find_one({'categoryId': record['parentCategory']})
-					child_list = parent_result['childCategories']
-					child = {}
-					for ch in child_list:
-						if ch['categoryId'] == record['deleted_categoryId']:
-							child = ch
-							break
-					child_list.remove(child)
-					mongo_cursor.category.update_many({'categoryId': record['parentCategory']},
-						{'$set':{'childCategories': child_list}})
-				mongo_cursor.category.remove(data)
-				return {'status': config.HTML_STATUS_CODE['Success'],
-				'message': object_type + ": '"+data['categoryId']+"' deleted successfully!"}
+		record = db.session.query(models.Childcategory).filter_by(**data).first()
+		if not record: record = db.session.query(models.Parentcategory).filter_by(**data).first()
+	else: record = db.session.query(model).filter_by(**data).first()
+	if not record: return {'status': config.HTML_STATUS_CODE['NotFound'], 'message': object_type+"Id not found!"}
+	record = record.__dict__
+	del record['_sa_instance_state']
+	archive = archive_object(record, object_type)
+	if archive:
+		if object_type == 'category':
+			if db.session.query(models.Childcategory).filter_by(**data).first():
+				db.session.query(models.Childcategory).filter_by(**data).delete()
 			else:
-				return {'status': config.HTML_STATUS_CODE['NotImplemented'],
-				'message': "An error occurred while archiving! The object could not be deleted."}
+				db.session.query(models.Parentcategory).filter_by(**data).delete()
 		else:
-			return {'status': config.HTML_STATUS_CODE['NotFound'], 'message': object_type+"Id not found!"}
-	record = db.session.query(model).filter_by(**data).first()
-	if record:
-		record = record.__dict__
-		del record['_sa_instance_state']
-		archive = archive_object(record, object_type)
-		if archive:
-			if object_type == 'product':
-				#delete product from its shop products list
-				shop_result = db.session.query(models.Shop).filter_by(shopId = record['shopId']).first()
-				prouduct_list = copy.deepcopy(shop_result.productsList)
-				if record['deleted_productId'] in prouduct_list:
-					prouduct_list.remove(record['deleted_productId'])
-					shop_result.productsList = prouduct_list
-				#delete product from its category products list
-				mongo_cursor = config_mongodb()
-				cat_result = mongo_cursor.category.find_one({'title':record['categoryName']})
-				productsList = cat_result['productsList']
-				product = {}
-				for p in productsList:
-					if p['productId'] == record['deleted_productId']:
-						product = p
-						break
-				productsList.remove(product)
-				mongo_cursor.category.update_many({'categoryId': cat_result['categoryId']},
-					{'$set':{'productsList': productsList}})
 			db.session.query(model).filter_by(**data).delete()
-			db.session.commit()
-			return {'status': config.HTML_STATUS_CODE['Success'],
-			'message': object_type + ": '"+data[object_type+'Id']+"' deleted successfully!"}
-		else:
-			return {'status': config.HTML_STATUS_CODE['NotImplemented'],
-			'message': "An error occurred while archiving! The object could not be deleted."}
+		db.session.commit()
+		return {'status': config.HTML_STATUS_CODE['Success'],
+		'message': object_type + ": '"+data[object_type+'Id']+"' deleted successfully!"}
 	else:
-		return {'status': config.HTML_STATUS_CODE['NotFound'], 'message': object_type+"Id not found!"}
+		return {'status': config.HTML_STATUS_CODE['NotImplemented'],
+		'message': "An error occurred while archiving! The object could not be deleted."}
+
+def edit_object(data, object_type):
+	if object_type == 'product':
+		result = edit_products(data)
+	elif object_type == 'shop':
+		result = edit_shops(data)
+	elif object_type == 'user':
+		result = edit_users(data)
+	elif object_type == 'category':
+		result = edit_categories(data)
+	else:
+		result = {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "wrong api address!"}
+	return result
+
+def edit_products(data):
+	query = db.session.query(models.Product).filter_by(**{'productId': data['productId']})
+	result = query.first()
+	if not result: return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "wrong productId!"}
+	result_dict = result.__dict__
+	for key in list(result_dict.keys()):
+		if key == 'productId': continue
+		if key in data.keys():
+			if key not in config.productsConstantValues:
+				if key == 'imageList':
+					pushpop_result = push_pop_images(data['imageList'], data['productId'],
+						result.ownerId, result.imageList)
+					if pushpop_result[0]: result.imageList = pushpop_result[1]
+					else: return pushpop_result[1]
+				elif key == 'shopId':
+					shop_result = models.Shop.query.filter_by(**{key:data[key]}).first()
+					if shop_result:
+						result.shop = shop_result
+					else:
+						return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "wrong shopId!"}
+				elif key == 'categoryId':
+					cat_result = models.Childcategory.query.filter_by(**{key:data[key]}).first()
+					if cat_result:
+						result.category = cat_result
+					else:
+						return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "wrong categoryId!"}
+				elif key == 'rostaakLocation':
+					result.key = transform_rostaak_location(data['rostaakLocation'])
+				else:
+					try: query.update({key: data[key]})
+					except:
+						return {'status': config.HTML_STATUS_CODE['NotImplemented'],
+						'message': "An error occurred. The object could not be edited!"}
+			else: return {'status': config.HTML_STATUS_CODE['NotAcceptable'],
+			'message': "'"+key+"' can not be edited!"}
+	db.session.commit()
+	return {'status': config.HTML_STATUS_CODE['Success'], 'message': "Edited successfully!"}
+
+def edit_shops(data):
+	query = db.session.query(models.Shop).filter_by(**{'shopId': data['shopId']})
+	result = query.first()
+	if not result: return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "wrong shopId!"}
+	result_dict = result.__dict__
+	for key in list(result_dict.keys()):
+		if key == 'shopId': continue
+		if key in data.keys():
+			if key not in config.shopsConstantValues:
+				if key == 'imageList':
+					pushpop_result = push_pop_images(data['imageList'], data['shopId'],
+						result.ownerId, result.imageList)
+					if pushpop_result[0]: result.imageList = pushpop_result[1]
+					else: return pushpop_result[1]
+				else:
+					try: query.update({key: data[key]})
+					except:
+						return {'status': config.HTML_STATUS_CODE['NotImplemented'],
+						'message': "An error occurred. The object could not be edited!"}
+			else: return {'status': config.HTML_STATUS_CODE['NotAcceptable'],
+			'message': "'"+key+"' can not be edited!"}
+	db.session.commit()
+	return {'status': config.HTML_STATUS_CODE['Success'], 'message': "Edited successfully!"}
+
+def edit_users(data):
+	query = db.session.query(models.User).filter_by(**{'userId': data['userId']})
+	result = query.first()
+	if not result: return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "wrong userId!"}
+	result_dict = result.__dict__
+	for key in list(result_dict.keys()):
+		if key == 'userId': continue
+		if key in data.keys():
+			if key not in config.shopsConstantValues:
+				try: query.update({key: data[key]})
+				except:
+					return {'status': config.HTML_STATUS_CODE['NotImplemented'],
+					'message': "An error occurred. The object could not be edited!"}
+			else: return {'status': config.HTML_STATUS_CODE['NotAcceptable'],
+			'message': "'"+key+"' can not be edited!"}
+	db.session.commit()
+	return {'status': config.HTML_STATUS_CODE['Success'], 'message': "Edited successfully!"}
+
+def edit_categories(data):
+	mongo_cursor = config_mongodb()
+	result = mongo_cursor.category.find_one({'categoryId': data['categoryId']})
+	if not result: return {'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "wrong categoryId!"}
+	for key in list(result.keys()):
+		if key == 'categoryId': continue
+		if key in data.keys():
+			if key not in config.categoriesConstantValues:
+				if key == 'imageList':
+					pushpop_result = push_pop_images(data['imageList'], data['categoryId'],
+						models.User.query.filter_by(cellNumber = data['cellNumber']).first().userId,
+						result['imageList'])
+					if pushpop_result[0]:
+						mongo_cursor.category.update_many({'categoryId': data['categoryId']},
+							{'$set':{'imageList': pushpop_result[1]}})
+					else: return pushpop_result[1]
+				if key == 'parentCategory':
+					pass
+					#not developed yet
+			else: return {'status': config.HTML_STATUS_CODE['NotAcceptable'],
+			'message': "'"+key+"' can not be edited!"}
+	return {'status': config.HTML_STATUS_CODE['Success'], 'message': "Edited successfully!"}
+
+def push_pop_images(data_imageList, productId, owner, result_imageList):
+	imageList = []
+	for encoded_img in data_imageList:
+		decoded_img = base64.b64decode(encoded_img)
+		img_directory = save_encoded_image(decoded_img, owner, productId)
+		if img_directory:
+			imageList.append(img_directory)
+		else: 
+			return (False, {'status': config.HTML_STATUS_CODE['NotImplemented'],
+			'message': "An error occurred in saving images!"})
+	#remove previous images from host:
+	for item in result_imageList:
+		item = item.replace('http://rstaak.ir', '/home/rstaakir/ROUSTA')
+		os.remove(item)
+	return (True, imageList)
 
 def query_range(data):
 	number = data['number'] if 'number' in data.keys() else 50
@@ -357,27 +512,35 @@ def filter_query(data, model, objectId, l1, l2):
 	else:
 		q = {}
 		for key, value in data.items():
-			if (value) and key not in ['number', 'factor', 'userId']:
+			if key not in ['number', 'factor', 'userId']:
 				q[key] = value
 		result = list(model[1].query.filter_by(**q).order_by(model[1].createdDatetime))[-(l1+1):-(l2+1):-1]
 	return result
 
 def category_query(data, query_type):
-	mongo_cursor = config_mongodb()
 	objectId = data['categoryId'] if 'categoryId' in data.keys() else None
+	result = []
 	if objectId:
-		result = []
-		result.append(mongo_cursor.category.find_one({'categoryId': objectId}))
-		return ({'status': config.HTML_STATUS_CODE['Success'],
-			'message': {'result': category_model(result)}})
+		child_cat = models.Childcategory.query.filter_by(categoryId = objectId).first()
+		if child_cat:
+			result.append(child_cat)
+			return ({'status': config.HTML_STATUS_CODE['Success'],
+			'message': {'result': childCategory_model(result)}})
+		else:
+			parent_cat = models.Parentcategory.query.filter_by(categoryId = objectId).first()
+			if parent_cat:
+				result.append(parent_cat)
+				return ({'status': config.HTML_STATUS_CODE['Success'],
+					'message': {'result': parentCategory_model(result)}})
 	child = data['child'] if 'child' in data.keys() else False
 	if child:
 		parentId = data['parentId'] if 'parentId' in data.keys() else None
 		if not parentId: return ({'status': config.HTML_STATUS_CODE['NotAcceptable'], 'message': "parentId is missed!"})
-		return ({'status': config.HTML_STATUS_CODE['Success'],
-			'message': {'result': category_model(mongo_cursor.category.find({'parentCategory': parentId}))}})
+		parent_cat = models.Childcategory.query.filter_by(parentCategory = parentId).first()
+		if parent_cat: result.append(parent_cat)
+		return ({'status': config.HTML_STATUS_CODE['Success'], 'message': {'result': childCategory_model(result)}})
 	return ({'status': config.HTML_STATUS_CODE['Success'],
-		'message': {'result': category_model(mongo_cursor.category.find({'parentCategory': None}))}})
+		'message': {'result': parentCategory_model(models.Parentcategory.query.all())}})
 
 def special_shop_query(data):
 	mongo_cursor = config_mongodb()
@@ -387,21 +550,15 @@ def special_shop_query(data):
 	if not shop_result: return ({'status': config.HTML_STATUS_CODE['NotFound'], 'message': "shopId not found!"})
 	products = []
 	vitrin_products = []
-	owner = shop_result.owner
-	for productId in shop_result.productsList:
-		product_result = models.Product.query.filter_by(**{'productId': productId}).first()
-		if not product_result:
-			continue
-		product = {'title': product_result.title, 'productId': product_result.productId,
-		'categoryId': product_result.categoryId}
-		category = mongo_cursor.category.find_one({'categoryId': product_result.categoryId})
-		parentCategory = mongo_cursor.category.find_one({'categoryId': category['parentCategory']})
-		product['categoryName'] = category['title']
-		product['parentCategory'] = category['parentCategory']
-		product['parentCategoryName'] = parentCategory['title'] if parentCategory else None
-		product['imageList'] = category['imageList'] if 'imageList' in category.keys() else []
+	owner = shop_result.ownerId
+	for pdct in shop_result.productsList:
+		product = {'title': pdct.title, 'productId': pdct.productId, 'categoryId': pdct.categoryId}
+		product['categoryName'] = pdct.category.title
+		product['parentCategory'] = pdct.category.parentCategory
+		product['parentCategoryName'] = pdct.category.parent.title
+		product['imageList'] = pdct.category.imageList
 		products.append(product)
-		if product_result.vitrin: vitrin_products.append(product_result.productId)
+		if pdct.vitrin: vitrin_products.append(pdct.productId)
 	#return ({'status': config.HTML_STATUS_CODE['Success'], 'message': {'result': products}})
 	parents_list = []
 	parents = {}
@@ -629,55 +786,111 @@ def push_pop_vitrin(data):
 	for productId in data['virtinPopList']:
 		if not models.Product.query.filter_by(**{'productId': productId}).first():
 			return {'status': config.HTML_STATUS_CODE['NotFound'], 'message': productId+" not found!"}
-	for productId in data['virtinPushList']:
-		product_result = db.session.query(models.Product).filter_by(**{'productId': productId}).first()
-		product_result.vitrin = True
-		db.session.commit()
 	for productId in data['virtinPopList']:
 		product_result = db.session.query(models.Product).filter_by(**{'productId': productId}).first()
 		product_result.vitrin = False
+		db.session.commit()
+	for productId in data['virtinPushList']:
+		product_result = db.session.query(models.Product).filter_by(**{'productId': productId}).first()
+		product_result.vitrin = True
 		db.session.commit()
 	db.session.close()
 	return {'status': config.HTML_STATUS_CODE['Success'], 'message': "successfully done!"}
 
 def archive_object(record, object_type):
+	mongo_cursor = config_mongodb()
 	try:
-		if object_type == 'category':
-			mongo_cursor = config_mongodb()
-			record['deletedDatetime'] = jdatetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S')
-			record['archiveCategorytId'] = str(uuid.uuid4())
-			record['deleted_categoryId'] = record['categoryId']
-			del record['categoryId']
-			mongo_cursor.category_archive.insert_one(record)
-			return True
 		record['deletedDatetime'] = jdatetime.datetime.now().strftime('%Y/%m/%d %H:%M:%S')
-		record['deleted_'+object_type+'Id'] = record[object_type+'Id']
-		del record[object_type+'Id']
 		if object_type == 'user':
-			record['archiveUserId'] = str(uuid.uuid4())
-			models.UserArchive.create(**record)
+			mongo_cursor.user_archive.insert_one(record)
 		elif object_type == 'product':
-			record['archiveProductId'] = str(uuid.uuid4())
-			models.ProductArchive.create(**record)
+			mongo_cursor.product_archive.insert_one(record)
 		elif object_type == 'shop':
-			record['archiveShopId'] = str(uuid.uuid4())
-			models.ShopArchive.create(**record)
+			mongo_cursor.shop_archive.insert_one(record)
+		elif object_type == 'category':
+			mongo_cursor.category_archive.insert_one(record)
 		return True
 	except:
 		return False
 
-def test():
-	mongo_cursor = config_mongodb()
-	parent_result = mongo_cursor.category.find_one({'categoryId': "f25037d0-acec-4b81-a5d9-ec80a73c4d02"})
-	child_list = parent_result['childCategories']
-	child = {}
-	for ch in child_list:
-		if ch['categoryId'] == "e354b01e-e265-4d70-8ed6-bc6f9deb1242":
-			child = ch
-			break
-	child_list.remove(child)
-	mongo_cursor.category.update_many({'categoryId': "f25037d0-acec-4b81-a5d9-ec80a73c4d02"},
-		{'$set':{'childCategories': child_list}})
+def user_in_mongo_chat_db(user):
+	rec = {'userId': user.userId, 'cellNumber': user.cellNumber, 'createdDatetime': user.createdDatetime,
+	'socket_id': "", 'location': "", 'location_id': ""}
+	mongo_cursor = config_chat_mongodb()
+	mongo_cursor.users.insert_one(rec)
+
+def get_products_forChat(data):
+	if get_products_forChat_validator(data):
+		return get_products_forChat_validator(data)
+	result_list = []
+	chat_cursor = config_chat_mongodb()
+	query = {'$or': [{'ownerId': data['userId']}, {'userIdList': {'$in': [data['userId']]}}]}
+	mongo_result = chat_cursor.products.find(query)
+	for r in mongo_result:
+		mysql_result = models.Product.query.filter_by(**{'productId': r['productId']}).first()
+		result = {
+		'productId': mysql_result.productId,
+		'ownerId': mysql_result.ownerId,
+		'title': mysql_result.title,
+		'imageList': mysql_result.imageList[0],
+		'ownerName': mysql_result.owner.fullName
+		}
+		result_list.append(result)
+	return {'status': config.HTML_STATUS_CODE['Success'], 'message': result_list}
+
+def get_product_chats(data):
+	if get_product_chats_validator(data):
+		return get_product_chats_validator(data)
+	chats = {}
+	chat_cursor = config_chat_mongodb()
+	query = {'productId': data['productId']};
+	mongo_result = chat_cursor.products.find_one(query)
+	if not mongo_result:
+		return {'status': config.HTML_STATUS_CODE['NotFound'], 'message': 'There is no result for productId!'}
+	if data['userId'] == mongo_result['ownerId']:
+		mongo_result_keys = list(mongo_result.keys())
+		for key in ['_id', 'productId', 'ownerId', 'userIdList']:
+			mongo_result_keys.remove(key)
+		for key in mongo_result_keys:
+			chats[key] = mongo_result[key]
+	else:
+		chats[data['userId']] = mongo_result[data['userId']]
+	return {'status': config.HTML_STATUS_CODE['Success'], 'message': chats}
+
+def get_chat(data):
+	if get_chat_validator(data):
+		return get_chat_validator(data)
+	chat_cursor = config_chat_mongodb()
+	query = {'productId': data['productId']};
+	mongo_result = chat_cursor.products.find_one(query)
+	if not mongo_result:
+		return {'status': config.HTML_STATUS_CODE['NotFound'], 'message': 'There is no result for productId!'}
+	for userId in list(mongo_result.keys()):
+		if data['userId'] == userId:
+			return {'status': config.HTML_STATUS_CODE['Success'], 'message': mongo_result['userId']}
+	return {'status': config.HTML_STATUS_CODE['NotFound'], 'message': 'There is no result for userId!'}
+
+def socket_on(data):
+	if socket_on_validator(data):
+		return socket_on_validator(data)
+	result_list = []
+	chat_cursor = config_chat_mongodb()
+	query = {'$or': [{'ownerId': data['userId']}, {'userIdList': {'$in': [data['userId']]}}, {'if_newChat': True}]}
+	mongo_result = chat_cursor.products.find(query)
+	for r in mongo_result:
+		mysql_result = models.Product.query.filter_by(**{'productId': r['productId']}).first()
+		result = {
+		'productId': mysql_result.productId,
+		'ownerId': mysql_result.ownerId,
+		'title': mysql_result.title,
+		'imageList': mysql_result.imageList[0],
+		'ownerName': mysql_result.owner.fullName
+		}
+		result_list.append(result)
+	for r in mongo_result:
+		chat_cursor.products.update_many({'productId': r['productId']},
+			{'$set':{'if_newChat': False}})
+	return {'status': config.HTML_STATUS_CODE['Success'], 'message': result_list}
 
 def user_model(result):
 	result_list = []
@@ -702,14 +915,15 @@ def product_model(result, userId):
 		likeFlag = True if userId in r.likeList else False
 		result_dict = {
 		'productId' : r.productId,
-		'owner' : r.owner,
+		'owner' : r.ownerId,
+		'ownerCellNumber': r.owner.cellNumber,
 		'shopId': r.shopId,
-		'shopName': r.shopName,
+		'shopName': r.shop.title,
 		'createdDatetime': r.createdDatetime,
 		'modified_on': r.modified_on,
 		'title' : r.title,
 		'categoryId' : r.categoryId,
-		'categoryName' : r.categoryName,
+		'categoryName' : r.category.title,
 		'description' : r.description,
 		'price' : r.price,
 		'imageList' : r.imageList,
@@ -727,10 +941,13 @@ def product_model(result, userId):
 def shop_model(result, userId):
 	result_list = []
 	for r in result:
+		productsList = []
+		for product in r.productsList:
+			productsList.append(product.productId)
 		likeFlag = True if userId in r.likeList else False
 		result_dict = {
 		'shopId' : r.shopId,
-		'owner' : r.owner,
+		'owner' : r.ownerId,
 		'createdDatetime': r.createdDatetime,
 		'modified_on': r.modified_on,
 		'title' : r.title,
@@ -738,7 +955,7 @@ def shop_model(result, userId):
 		'address' : r.address,
 		'imageList' : r.imageList,
 		'phoneNumber': r.phoneNumber,
-		'productsList': r.productsList,
+		'productsList': productsList,
 		'bankAcountsInformation': r.bankAcountsInformation,
 		'shopLink': r.shopLink,
 		'viewedNumber' : len(r.viewList),
@@ -748,16 +965,34 @@ def shop_model(result, userId):
 		result_list.append(result_dict)
 	return result_list
 
-def category_model(result):
+def childCategory_model(result):
 	result_list = []
 	for r in result:
 		result_dict = {
-		'title': r['title'],
-		'categoryId': r['categoryId'],
-		'createdDatetime': r['createdDatetime'],
-		'childCategories': r['childCategories'],
-		'parentCategory': r['parentCategory'],
-		'imageList': r['imageList']
+		'title': r.title,
+		'categoryId': r.categoryId,
+		'createdDatetime': r.createdDatetime,
+		'childCategories': [],
+		'parentCategory': r.parentCategory,
+		'parentCategoryName': r.parent.title,
+		'imageList': r.imageList
+		}
+		result_list.append(result_dict)
+	return result_list
+
+def parentCategory_model(result):
+	result_list = []
+	for r in result:
+		childCategories = []
+		for child_cat in r.childCategories:
+			childCategories.append({'categoryId': child_cat.categoryId, 'title': child_cat.title})
+		result_dict = {
+		'title': r.title,
+		'categoryId': r.categoryId,
+		'createdDatetime': r.createdDatetime,
+		'childCategories': childCategories,
+		'parentCategory': None,
+		'imageList': r.imageList
 		}
 		result_list.append(result_dict)
 	return result_list

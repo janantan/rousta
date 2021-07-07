@@ -1,3 +1,11 @@
+#mysql config info
+MYSQL_HOST = "localhost"
+MYSQL_PORT = 3306
+#MYSQL_USERNAME = "rstaakir_mysql"
+MYSQL_USERNAME = "mysql"
+#MYSQL_PASSWORD = "Vi8Um-i(2*v;"
+MYSQL_PASSWORD = "123fes"
+
 #postgresql config info
 POSTGRESQL_HOST = "localhost"
 POSTGRESQL_PORT = 5432
@@ -16,8 +24,10 @@ MONGODB_USERNAME = "mongo"
 MONGODB_PASSWORD = "123fes"
 authMechanism = "SCRAM-SHA-256"
 
-#DB_NAME = "rstaakir_rousta"
-DB_NAME = "rousta"
+MYSQL_DB_NAME = "rstaakir_rostaak"
+POSTGRESQL_DB_NAME = "rstaakir_rousta"
+MONGO_DB_NAME = "rousta"
+MONGO_CHAT_DB_NAME = "rstaakir_chat"
 
 #ippanel (sms sender) config info
 IPPANEL_API_KEY = "at8ETrykancq8AY8ktJjbXD1z42wWiHBosVOEa3OUOA="
@@ -42,3 +52,10 @@ HTML_STATUS_CODE = {
 'NoContent': 204,
 'NotImplemented': 501
 }
+
+productsConstantValues = ['_sa_instance_state', 'productId', 'createdDatetime',
+'owner', 'byer', 'ordered', 'viewList', 'likeList']
+shopsConstantValues = ['_sa_instance_state', 'shopId', 'createdDatetime',
+'owner', 'productsList', 'customersList', 'viewList', 'likeList', 'shopLink']
+categoriesConstantValues = ['categoryId', 'createdDatetime',
+'childCategories', 'productsList']
